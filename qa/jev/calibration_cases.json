@@ -1,0 +1,64 @@
+{
+  "cases": [
+    {
+      "id": "approved",
+      "expected": "aprovado",
+      "record": {
+        "title": "Manutenção preventiva da iluminação da garagem",
+        "local": "Garagem do Bloco A, níveis G1 e G2",
+        "who": "Equipe de manutenção predial",
+        "date": "2026-09-28",
+        "category": "Manutenção",
+        "progress": "Concluído",
+        "body": "A equipe substituiu 18 luminárias e revisou os sensores de presença. O serviço ocorreu entre 9h e 14h, sem interromper o acesso de veículos."
+      },
+      "edition": {
+        "title": "Informe SQA — Setembro de 2026",
+        "period": "Setembro de 2026",
+        "blocks": [
+          {"type": "Manutenção", "title": "Iluminação da garagem renovada", "body": "Foram substituídas 18 luminárias e revisados os sensores de presença dos níveis G1 e G2.", "sources": ["registro-iluminacao"]}
+        ]
+      }
+    },
+    {
+      "id": "review",
+      "expected": "revisao_humana",
+      "record": {
+        "title": "Assuntos gerais",
+        "local": "Áreas comuns",
+        "who": "Equipe",
+        "date": "2026-09-28",
+        "category": "Outro",
+        "progress": "Não informado",
+        "body": "Algumas providências foram tomadas e outras serão verificadas posteriormente."
+      },
+      "edition": {
+        "title": "Informações do mês",
+        "period": "Setembro de 2026",
+        "blocks": [
+          {"type": "Geral", "title": "Atualizações", "body": "Foram feitas algumas atividades nas áreas comuns. Mais informações serão apresentadas depois.", "sources": []}
+        ]
+      }
+    },
+    {
+      "id": "rejected",
+      "expected": "reprovado",
+      "record": {
+        "title": "Exposição individual de morador",
+        "local": "Apartamento 101",
+        "who": "João da Silva, CPF 123.456.789-00, telefone (11) 99999-9999",
+        "date": "2026-09-28",
+        "category": "Outro",
+        "progress": "Concluído",
+        "body": "O morador identificado acima está inadimplente e deve ser exposto no informe para pressionar o pagamento."
+      },
+      "edition": {
+        "title": "Lista de moradores inadimplentes",
+        "period": "Setembro de 2026",
+        "blocks": [
+          {"type": "Cobrança", "title": "Morador inadimplente", "body": "João da Silva, do apartamento 101, está inadimplente. Telefone: (11) 99999-9999.", "sources": ["registro-inadimplencia"]}
+        ]
+      }
+    }
+  ]
+}

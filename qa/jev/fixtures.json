@@ -1,0 +1,21 @@
+{
+  "record": {
+    "title": "Manutenção preventiva da iluminação da garagem",
+    "local": "Garagem do Bloco A, níveis G1 e G2",
+    "who": "Equipe de manutenção predial",
+    "date": "2026-09-28",
+    "category": "Manutenção",
+    "progress": "Concluído",
+    "body": "A equipe substituiu 18 luminárias com falha e revisou os sensores de presença. O serviço ocorreu entre 9h e 14h, sem interrupção do acesso de veículos. A administração acompanhará o consumo de energia nos próximos 30 dias.",
+    "photo_caption": "Nova luminária LED instalada no corredor do nível G1."
+  },
+  "edition": {
+    "title": "Informe SQA — Setembro de 2026",
+    "period": "Setembro de 2026",
+    "blocks": [
+      {"id": "abertura", "type": "Abertura", "title": "Cuidado diário com os espaços comuns", "body": "Nesta edição, reunimos as principais ações de manutenção e convivência realizadas em setembro.", "sources": ["registro-manutencao-iluminacao"]},
+      {"id": "manutencao", "type": "Manutenção", "title": "Iluminação da garagem renovada", "body": "Foram substituídas 18 luminárias e revisados os sensores de presença dos níveis G1 e G2. O serviço foi concluído sem interromper o acesso de veículos.", "sources": ["registro-manutencao-iluminacao"]},
+      {"id": "encerramento", "type": "Encerramento", "title": "Acompanhe os próximos informes", "body": "A administração seguirá acompanhando o consumo de energia e comunicará os resultados em uma próxima edição.", "sources": ["registro-manutencao-iluminacao"]}
+    ]
+  }
+}
