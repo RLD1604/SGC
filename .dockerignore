@@ -1,0 +1,15 @@
+*
+!Dockerfile
+!public/
+!public/**
+!server.py
+!schema.sql
+!requirements.txt
+!rich_text.py
+!ai_review.py
+!auth.py
+!authorization.py
+!editorial_api.py
+!manage_accounts.py
+public/vendor/jodit.min.js
+public/vendor/jodit.min.css

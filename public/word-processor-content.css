@@ -1,0 +1,5 @@
+html {background:#eef1f5;padding:20px;box-sizing:border-box;}
+body {box-sizing:border-box;margin:0 auto;max-width:794px;min-height:calc(100vh - 40px);padding:40px 46px;background:white;color:#22354a;font:12pt/1.5 Arial,sans-serif;box-shadow:0 2px 12px #23354c14;overflow-wrap:break-word;}
+p {margin:0 0 12pt} h1,h2,h3 {line-height:1.25} table {border-collapse:collapse;max-width:100%;} td,th {border:1px solid #bcc6d1;padding:8px;} blockquote {border-left:3px solid #79559b;margin-left:0;padding-left:18px;color:#586879;} a {color:#684b91;}
+@media(max-width:600px){html{padding:6px}body{padding:20px 16px}}
+@media print{html{background:white;padding:0}body{box-shadow:none;padding:0;max-width:none}}

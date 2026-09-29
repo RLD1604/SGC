@@ -1,0 +1,52 @@
+name: sistema-gestao-comunicacao-condominio
+services:
+  prototipo:
+    build: .
+    container_name: sistema-gestao-comunicacao-condominio
+    ports:
+      - "127.0.0.1:${APP_PORT:-9001}:8080"
+    restart: unless-stopped
+    environment:
+      DB_HOST: database
+      DB_NAME: condominio
+      DB_USER: condominio
+      DB_PASSWORD_FILE: /run/secrets/db_password
+      GROQ_API_KEY_FILE: /run/secrets/groq_api_key
+      AI_FREE_TIER_CONFIRMED: ${AI_FREE_TIER_CONFIRMED:-false}
+    secrets:
+      - db_password
+      - groq_api_key
+    depends_on:
+      database:
+        condition: service_healthy
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    labels:
+      app.display-name: Sistema-Gestão-Comunicação-Condomínio
+      app.version: 0.2.3-beta.1
+  database:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: condominio
+      POSTGRES_USER: condominio
+      POSTGRES_PASSWORD_FILE: /run/secrets/db_password
+    secrets:
+      - db_password
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: [CMD-SHELL, "pg_isready -U condominio -d condominio"]
+      interval: 5s
+      timeout: 5s
+      retries: 15
+volumes:
+  postgres_data:
+secrets:
+  db_password:
+    file: ./.secrets/postgres_password
+  groq_api_key:
+    file: ./.secrets/groq_api_key
