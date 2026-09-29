@@ -1,0 +1,21 @@
+[Unit]
+Description=Backup diário cifrado e verificado do SGC
+Requires=docker.service
+After=docker.service
+ConditionPathExists=/etc/sgc-backup/sgc-backup.conf
+
+[Service]
+Type=oneshot
+User=root
+Group=root
+Environment=SGC_BACKUP_CONFIG=/etc/sgc-backup/sgc-backup.conf
+ExecStart=/usr/local/sbin/sgc-backup
+ExecStartPost=/usr/local/sbin/sgc-backup-retention-report
+Nice=10
+IOSchedulingClass=best-effort
+IOSchedulingPriority=7
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ReadWritePaths=/var/backups/sgc /var/lib/sgc-backup-staging /var/run/docker.sock
+NoNewPrivileges=true

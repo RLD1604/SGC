@@ -1,0 +1,20 @@
+# Copiar para /etc/sgc-backup/sgc-backup.conf, chmod 0600, proprietário root.
+BACKUP_ROOT=/var/backups/sgc
+DB_CONTAINER=sgc-codex-database
+APP_CONTAINER=sgc-codex-app
+DB_NAME=condominio
+DB_USER=condominio
+POSTGRES_IMAGE=postgres:17
+
+# Destinatário age público. A chave privada não deve existir no VPS de produção.
+# Exemplo: age1xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+AGE_RECIPIENT=
+
+# Diretório temporário preferencialmente em tmpfs. Nenhum segredo é gravado no pacote.
+STAGING_ROOT=/run/sgc-backup
+
+# Nesta primeira versão a retenção somente informa candidatos; nunca exclui arquivos.
+RETENTION_DAILY=14
+RETENTION_WEEKLY=8
+RETENTION_MONTHLY=12
+
