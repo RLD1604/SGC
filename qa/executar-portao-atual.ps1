@@ -74,7 +74,7 @@ if(Test-Path $keyFile){
   $previousWslEnv=$env:WSLENV;$env:TYPESAFE_API_KEY=$secret
   if([string]::IsNullOrWhiteSpace($previousWslEnv)){$env:WSLENV='TYPESAFE_API_KEY'}
   elseif($previousWslEnv -notmatch '(^|:)TYPESAFE_API_KEY(/[^:]*)?($|:)'){$env:WSLENV=$previousWslEnv+':TYPESAFE_API_KEY'}
-  try {$jevOutput=wsl -d Ubuntu -- python3 $linuxScript --runs 3 --output $linuxReport 2>&1;$jevCode=$LASTEXITCODE}
+  try {$jevOutput=wsl -d Ubuntu -- python3 $linuxScript --runs 5 --output $linuxReport 2>&1;$jevCode=$LASTEXITCODE}
   finally {Remove-Item Env:TYPESAFE_API_KEY -ErrorAction SilentlyContinue;$env:WSLENV=$previousWslEnv;$secret=$null}
   Save-Lines (Join-Path $resultDir 'jev.log') $jevOutput
 }
@@ -82,7 +82,8 @@ if(Test-Path $keyFile){
 $jevPassed=$false
 if(Test-Path $jevReport){$jevPassed=[bool]((Get-Content -Raw $jevReport|ConvertFrom-Json).passed)}
 $passed=($buildCode-eq 0 -and $unitCode-eq 0 -and $integrationCode-eq 0 -and $browserCode-eq 0 -and $jevCode-eq 0 -and $jevPassed)
-$summary=[ordered]@{runId=$runId;passed=$passed;resultDirectory=$resultDir;buildPassed=($buildCode-eq 0);unitTests=35;unitPassed=($unitCode-eq 0);integrationPassed=($integrationCode-eq 0);authenticatedBrowserPassed=($browserCode-eq 0);jevPassed=$jevPassed;jevRuns=3;legacyBrowserSuite='substituida no portao atual pela bateria autenticada de campos e blocos'}
+$unitTestCount=@($unitOutput|Select-String '^test_').Count
+$summary=[ordered]@{runId=$runId;passed=$passed;resultDirectory=$resultDir;buildPassed=($buildCode-eq 0);unitTests=$unitTestCount;unitPassed=($unitCode-eq 0);integrationPassed=($integrationCode-eq 0);authenticatedBrowserPassed=($browserCode-eq 0);jevPassed=$jevPassed;jevRuns=5;legacyBrowserSuite='substituida no portao atual pela bateria autenticada de campos e blocos'}
 [IO.File]::WriteAllText((Join-Path $resultDir 'summary.json'),($summary|ConvertTo-Json -Depth 4),(New-Object Text.UTF8Encoding($false)))
 $summary|ConvertTo-Json -Depth 4
 if(!$passed){exit 1}

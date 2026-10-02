@@ -28,15 +28,15 @@ async function persistDocuments(snapshot){
    if(!prior){
     const desired=incoming.status||'draft',draft={...serverDocument(incoming),status:'draft',[kind==='record'?'revision':'version']:1};
     let result=await api(base,{document:draft,condominiumId:'sqa'},null,'POST');let saved=result.document;
-    if(kind==='record'&&desired==='review')saved=(await api(`${base}/${incoming.id}/submit`,{},null,'POST')).document;
+    if(kind==='record'&&desired==='review')saved=(await api(`${base}/${incoming.id}/submit`,{expectedRevision:saved.revision},null,'POST')).document;
     Object.assign(incoming,saved);continue;
    }
    const contentChanged=JSON.stringify(withoutWorkflow(incoming,kind))!==JSON.stringify(withoutWorkflow(prior,kind));
    let saved=prior;
    if(contentChanged){const result=await api(`${base}/${incoming.id}`,{expectedRevision:prior[kind==='record'?'revision':'version'],document:serverDocument(incoming)},null,'PATCH');saved=result.document;}
    if(kind==='record'&&incoming.status!==prior.status){
-    if(incoming.status==='review')saved=(await api(`${base}/${incoming.id}/submit`,{},null,'POST')).document;
-    else if(['ready','fix'].includes(incoming.status))saved=(await api(`${base}/${incoming.id}/review`,{decision:incoming.status,reason:incoming.feedback||''},null,'POST')).document;
+    if(incoming.status==='review')saved=(await api(`${base}/${incoming.id}/submit`,{expectedRevision:saved.revision},null,'POST')).document;
+    else if(['ready','fix'].includes(incoming.status))saved=(await api(`${base}/${incoming.id}/review`,{decision:incoming.status,reason:incoming.feedback||'',expectedRevision:saved.revision},null,'POST')).document;
    }
    Object.assign(incoming,saved);
   }

@@ -21,7 +21,7 @@ function saveCurrentText() {
   button?.click();
 }
 
-function createWordProcessor(selector) {
+function createWordProcessor(selector,documentContext=null) {
   const target=typeof selector==='string'?document.querySelector(selector):selector;
   if(wordProcessors.has(target))return wordProcessors.get(target);
   let instance=null,removed=false;
@@ -30,6 +30,16 @@ function createWordProcessor(selector) {
     set value(html){target.value=sanitizeEditorialHTML(html);if(instance?.initialized)instance.setContent(target.value);},
     get editor(){return instance?.getBody();},
     get instance(){return instance;},
+    documentContext(){
+      const routeId=location.hash.split('/')[1];
+      const record=target.id==='record-text'?currentRecord:target.id==='feedback'?state?.records?.find(item=>item.id===routeId):null;
+      const inferred=record?{documentType:'record',documentId:record.id,expectedRevision:record.revision}:null;
+      const context=documentContext||inferred;
+      const type=context?.documentType||target.dataset.documentType;
+      const id=context?.documentId||target.dataset.documentId;
+      const revision=Number(context?.expectedRevision??target.dataset.documentRevision);
+      return type&&id&&Number.isInteger(revision)?{documentType:type,documentId:id,expectedRevision:revision}:null;
+    },
     sync(){if(instance?.initialized)target.value=handle.value;},
     destruct(){removed=true;if(instance)instance.remove();wordProcessors.delete(target);}
   };

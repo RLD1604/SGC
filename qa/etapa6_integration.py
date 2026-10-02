@@ -65,25 +65,27 @@ def main():
     staff, staff_csrf = clients["encarregado"]
     supervisor, supervisor_csrf = clients["supervisor"]
     manager, manager_csrf = clients["gestor"]
+    trustee, trustee_csrf = clients["sindico"]
     editor, editor_csrf = clients["editor"]
     admin, admin_csrf = clients["administrador_tecnico"]
 
     draft_id, submitted_id = "pilot-draft", "pilot-submitted"
     draft = assert_status(mutate(staff, staff_csrf, "POST", "/api/records", {"document": record_document(draft_id, "Rascunho privado")}), 201, "criar rascunho")["document"]
     submitted = assert_status(mutate(staff, staff_csrf, "POST", "/api/records", {"document": record_document(submitted_id, "Registro enviado")}), 201, "criar registro")["document"]
-    submitted = assert_status(mutate(staff, staff_csrf, "POST", f"/api/records/{submitted_id}/submit"), 200, "enviar registro")["document"]
+    submitted = assert_status(mutate(staff, staff_csrf, "POST", f"/api/records/{submitted_id}/submit", {"expectedRevision": submitted["revision"]}), 200, "enviar registro")["document"]
 
     supervisor_state = assert_status(supervisor.get("/api/workspace"), 200, "workspace supervisor")["state"]
     if {item["id"] for item in supervisor_state["records"]} & {draft_id, submitted_id}:
         raise AssertionError("Supervisor leu documento de outra pessoa sem atribuição.")
-    assert_status(mutate(supervisor, supervisor_csrf, "POST", f"/api/records/{submitted_id}/review", {"decision": "ready"}), 404, "supervisor não confere")
+    assert_status(mutate(supervisor, supervisor_csrf, "POST", f"/api/records/{submitted_id}/review", {"decision": "ready", "expectedRevision": submitted["revision"]}), 404, "supervisor não confere")
     assert_status(mutate(supervisor, supervisor_csrf, "PATCH", f"/api/records/{draft_id}", {"expectedRevision": 1, "document": record_document(draft_id, "Tentativa IDOR")}), 404, "IDOR bloqueado")
 
     manager_state = assert_status(manager.get("/api/workspace"), 200, "workspace gestor")["state"]
     visible = {item["id"] for item in manager_state["records"]}
     if submitted_id not in visible or draft_id in visible:
         raise AssertionError("Filtro de rascunhos/enviados do gestor está incorreto.")
-    ready = assert_status(mutate(manager, manager_csrf, "POST", f"/api/records/{submitted_id}/review", {"decision": "ready"}), 200, "conferência do gestor")["document"]
+    assert_status(mutate(manager, manager_csrf, "POST", f"/api/records/{submitted_id}/review", {"decision": "ready", "expectedRevision": submitted["revision"] - 1}), 409, "revisão obsoleta bloqueada")
+    ready = assert_status(mutate(manager, manager_csrf, "POST", f"/api/records/{submitted_id}/review", {"decision": "ready", "expectedRevision": submitted["revision"]}), 200, "conferência do gestor")["document"]
 
     assert_status(admin.get("/api/workspace"), 200, "workspace admin técnico")
     assert_status(mutate(admin, admin_csrf, "POST", "/api/records", {"document": record_document("admin-forbidden", "Negado")}), 403, "admin técnico sem editorial")
@@ -95,6 +97,11 @@ def main():
     assert_status(mutate(editor, editor_csrf, "POST", f"/api/edition-revisions/{revision_id}/decisions", {"decision": "approved"}), 404, "editor não aprova")
     assert_status(mutate(manager, manager_csrf, "PATCH", f"/api/editions/{edition_id}", {"expectedRevision": edition["version"], "document": edition}), 404, "revisão congelada não edita")
     assert_status(mutate(manager, manager_csrf, "POST", f"/api/edition-revisions/{revision_id}/decisions", {"decision": "approved"}), 200, "gestor aprova")
+    with connect() as conn, conn.cursor() as cur:
+        cur.execute("UPDATE memberships SET status='inactive' WHERE user_id=%s AND condominium_id='sqa'", (users["gestor"],))
+    assert_status(mutate(trustee, trustee_csrf, "POST", f"/api/edition-revisions/{revision_id}/publish", {}, {"Idempotency-Key": "inactive-approver"}), 409, "aprovação perde validade sem vínculo ativo")
+    with connect() as conn, conn.cursor() as cur:
+        cur.execute("UPDATE memberships SET status='active' WHERE user_id=%s AND condominium_id='sqa'", (users["gestor"],))
     publication = assert_status(mutate(manager, manager_csrf, "POST", f"/api/edition-revisions/{revision_id}/publish", {}, {"Idempotency-Key": "pilot-publication"}), 201, "publicação oficial")
     repeated = assert_status(mutate(manager, manager_csrf, "POST", f"/api/edition-revisions/{revision_id}/publish", {}, {"Idempotency-Key": "pilot-publication"}), 200, "idempotência publicação")
     if publication["publicationId"] != repeated["publicationId"]:
@@ -103,6 +110,9 @@ def main():
     assert_status(artifact, 200, "download oficial")
     if hashlib.sha256(artifact.data).hexdigest() != publication["artifactHash"]:
         raise AssertionError("Bytes oficiais divergem do hash aprovado.")
+    admin_publications = assert_status(admin.get("/api/workspace"), 200, "workspace técnico após publicação")["state"]["publications"]
+    if admin_publications:
+        raise AssertionError("Administrador técnico sem leitura editorial recebeu publicação.")
 
     with connect() as conn, conn.cursor() as cur:
         cur.execute("SELECT count(*) FROM record_metadata WHERE legacy_import AND author_user_id IS NOT NULL")

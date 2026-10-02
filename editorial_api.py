@@ -146,8 +146,10 @@ def register_editorial(app, connect, current_principal, require_session, require
                     latest = cur.fetchone()
                     item["_pendingRevisionId"] = str(latest[0]) if latest and state in ("pending_approval","approved") else None
                     output["editions"].append(item)
-            cur.execute("SELECT p.id,e.snapshot,p.published_at FROM official_publications p JOIN edition_revisions e ON e.id=p.edition_revision_id WHERE p.condominium_id = ANY(%s) ORDER BY p.published_at", (list(_actor_condominiums(actor)),))
-            for publication_id, snapshot, published_at in cur.fetchall():
+            cur.execute("SELECT p.id,e.snapshot,p.published_at,p.condominium_id FROM official_publications p JOIN edition_revisions e ON e.id=p.edition_revision_id WHERE p.condominium_id = ANY(%s) ORDER BY p.published_at", (list(_actor_condominiums(actor)),))
+            for publication_id, snapshot, published_at, condominium_id in cur.fetchall():
+                if not can(actor, "publication.read", {"condominium_id": condominium_id}, cur=cur):
+                    continue
                 item = dict(snapshot)
                 item.update(id=str(publication_id), at=published_at.isoformat(), official=True)
                 output["publications"].append(_contextualize_media(item, "official_publication", str(publication_id)))
@@ -220,7 +222,7 @@ def register_editorial(app, connect, current_principal, require_session, require
     @app.post("/api/records/<record_id>/submit")
     @require_mutation
     def submit_record(record_id):
-        return _record_transition(record_id, "review", "item.submit", "record.submit", connect, principal(), can, audit)
+        return _record_transition(record_id, "review", "item.submit", "record.submit", connect, principal(), can, audit, expected_revision=(request.get_json(silent=True) or {}).get("expectedRevision"))
 
     @app.post("/api/records/<record_id>/review")
     @require_mutation
@@ -228,7 +230,8 @@ def register_editorial(app, connect, current_principal, require_session, require
         decision = (request.get_json() or {}).get("decision")
         if decision not in ("ready", "fix"):
             raise ValueError("Decisão de conferência inválida.")
-        return _record_transition(record_id, decision, "item.review", "record.review", connect, principal(), can, audit, reason=(request.get_json() or {}).get("reason"))
+        body = request.get_json(silent=True) or {}
+        return _record_transition(record_id, decision, "item.review", "record.review", connect, principal(), can, audit, reason=body.get("reason"), expected_revision=body.get("expectedRevision"))
 
     @app.post("/api/editions")
     @require_mutation
@@ -344,7 +347,7 @@ def register_editorial(app, connect, current_principal, require_session, require
         if not operation_id or not re.fullmatch(r"[\w-]{1,100}", operation_id):
             raise ValueError("Identificação idempotente da publicação é obrigatória.")
         with connect() as conn, conn.cursor() as cur:
-            cur.execute("SELECT r.edition_id,r.artifact_html,r.artifact_hash,r.state,m.condominium_id,d.id,d.approver_user_id,g.ends_at,g.revoked_at,u.status,r.snapshot FROM edition_revisions r JOIN edition_metadata m ON m.edition_id=r.edition_id JOIN approval_decisions d ON d.edition_revision_id=r.id AND d.decision='approved' JOIN role_grants g ON g.id=d.role_grant_id JOIN users u ON u.id=d.approver_user_id WHERE r.id=%s FOR UPDATE", (revision_id,))
+            cur.execute("SELECT r.edition_id,r.artifact_html,r.artifact_hash,r.state,m.condominium_id,d.id,d.approver_user_id,g.ends_at,g.revoked_at,u.status,r.snapshot,am.status,am.starts_at,am.ends_at FROM edition_revisions r JOIN edition_metadata m ON m.edition_id=r.edition_id JOIN approval_decisions d ON d.edition_revision_id=r.id AND d.decision='approved' JOIN role_grants g ON g.id=d.role_grant_id JOIN users u ON u.id=d.approver_user_id JOIN memberships am ON am.id=g.membership_id AND am.user_id=d.approver_user_id AND am.condominium_id=m.condominium_id WHERE r.id=%s FOR UPDATE", (revision_id,))
             row = cur.fetchone()
             target = {"condominium_id": row[4], "state": row[3], "revision_id": revision_id} if row else None
             if not row or not can(actor, "publication.export", target, cur=cur):
@@ -356,7 +359,7 @@ def register_editorial(app, connect, current_principal, require_session, require
                     return jsonify(error="A chave já foi usada para outro conteúdo."), 409
                 return jsonify(publicationId=str(previous[0]), artifactHash=previous[1])
             now = datetime.now(timezone.utc)
-            if row[3] != "approved" or row[9] != "active" or row[8] is not None or (row[7] is not None and row[7] <= now):
+            if row[3] != "approved" or row[9] != "active" or row[8] is not None or (row[7] is not None and row[7] <= now) or row[11] != "active" or (row[12] is not None and row[12] > now) or (row[13] is not None and row[13] <= now):
                 return jsonify(error="A aprovação precisa ser ratificada por aprovador vigente."), 409
             artifact = bytes(row[1])
             if digest(artifact) != row[2]:
@@ -415,18 +418,26 @@ def register_editorial(app, connect, current_principal, require_session, require
 
 
 def _sync_media_refs(cur, condominium_id, document_type, document_id, document):
+    media_ids = _photo_ids(document)
+    for media_id in media_ids:
+        cur.execute("SELECT DISTINCT condominium_id FROM media_references WHERE media_id=%s", (media_id,))
+        owners = {str(row[0]) for row in cur.fetchall()}
+        if owners and str(condominium_id) not in owners:
+            raise ValueError("Uma foto pertence a outro condomínio.")
     cur.execute("DELETE FROM media_references WHERE document_type=%s AND document_id=%s", (document_type, document_id))
-    for media_id in _photo_ids(document):
+    for media_id in media_ids:
         cur.execute("INSERT INTO media_references(media_id,condominium_id,document_type,document_id) VALUES(%s,%s,%s,%s) ON CONFLICT DO NOTHING", (media_id, condominium_id, document_type, document_id))
 
 
-def _record_transition(record_id, target_state, permission, action, connect, actor, can, audit, reason=None):
+def _record_transition(record_id, target_state, permission, action, connect, actor, can, audit, reason=None, expected_revision=None):
     with connect() as conn, conn.cursor() as cur:
         cur.execute("SELECT r.document,m.condominium_id,m.author_user_id,m.current_revision FROM records r JOIN record_metadata m ON m.record_id=r.id WHERE r.id=%s FOR UPDATE", (record_id,))
         row = cur.fetchone()
         target = {"condominium_id": row[1], "author_user_id": str(row[2]) if row[2] else None, "revision": row[3], "state": row[0].get("status"), "document_id": record_id} if row else None
         if not row or not can(actor, permission, target, cur=cur):
             return jsonify(error="Documento não encontrado."), 404
+        if not isinstance(expected_revision, int) or expected_revision != row[3]:
+            return jsonify(error="Outra sessão alterou este registro. Recarregue antes de continuar."), 409
         allowed = {("draft", "review"), ("fix", "review"), ("review", "ready"), ("review", "fix")}
         if (row[0].get("status"), target_state) not in allowed:
             return jsonify(error="Transição editorial inválida."), 409

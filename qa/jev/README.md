@@ -21,7 +21,7 @@ python3 prototipo-condominio/qa/jev/run_jev_qa.py
 Calibração repetida com três casos sintéticos rotulados:
 
 ```bash
-python3 prototipo-condominio/qa/jev/calibrate_jev.py --runs 3
+python3 prototipo-condominio/qa/jev/calibrate_jev.py --runs 5
 ```
 
 O relatório de calibração é salvo em `qa/results/jev/calibration.json`.

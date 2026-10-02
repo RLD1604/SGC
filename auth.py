@@ -355,13 +355,11 @@ class AuthService:
         self._audit("auth.logout", actor_user_id=principal["user_id"], outcome="success")
         return response
 
-    def _can_manage(self) -> bool:
+    def _can_manage(self, condominium_id=None) -> bool:
         callback = self.app.config.get("AUTH_CAN_MANAGE_ACCOUNTS")
-        return bool(callback and callback(current_principal()))
+        return bool(callback and callback(current_principal(), condominium_id))
 
     def issue_invitation(self):
-        if not self._can_manage():
-            return jsonify(error="Ação não permitida."), 403
         delivery = self.app.config.get("AUTH_DELIVER_TOKEN")
         if not delivery:
             return jsonify(error="Entrega de convite não configurada."), 503
@@ -380,6 +378,8 @@ class AuthService:
         condominium_id = body.get("condominiumId") or ((current_principal() or {}).get("memberships") or [None])[0]
         if condominium_id not in (current_principal() or {}).get("memberships", []):
             return jsonify(error="Condomínio fora do seu escopo."), 403
+        if not self._can_manage(condominium_id):
+            return jsonify(error="Ação não permitida."), 403
         raw, digest = generate_token()
         invitation_id = uuid.uuid4()
         actor = current_principal()

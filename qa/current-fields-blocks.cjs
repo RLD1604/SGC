@@ -9,6 +9,7 @@ assert(login&&password,'Credenciais sintéticas de QA ausentes.');
  const browser=await chromium.launch({executablePath:'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',headless:true});
  const context=await browser.newContext({viewport:{width:1440,height:1050}}),page=await context.newPage();
  page.setDefaultTimeout(15000);
+ const pageErrors=[];page.on('pageerror',error=>pageErrors.push(error.message));
  const checks=[];
  const check=async(name,fn)=>{try{await fn();checks.push({name,passed:true});console.log('PASS '+name);}catch(error){checks.push({name,passed:false,error:error.message});console.error('FAIL '+name+': '+error.message);throw error;}};
  const open=async route=>{await page.goto(base+'/#'+route);await page.waitForFunction(()=>authSession&&state);};
@@ -62,8 +63,25 @@ assert(login&&password,'Credenciais sintéticas de QA ausentes.');
    await page.evaluate(()=>document.querySelector('#duplicate-block').click());await page.waitForTimeout(800);
    const afterDuplicate=await page.evaluate(id=>({blocks:state.editions.find(e=>e.id===id)?.blocks.length,toast:document.querySelector('#toast')?.textContent,recovery:document.querySelector('#storage-recovery')?.textContent||''}),editionId);
    assert.equal(afterDuplicate.blocks,2,JSON.stringify(afterDuplicate));
+   assert.equal(await page.locator('#move-up').isDisabled(),false);
+   await page.click('#move-up');await page.waitForFunction(()=>document.querySelector('#move-up')?.disabled===true);
+   await page.click('#move-down');await page.waitForFunction(()=>document.querySelector('#move-down')?.disabled===true);
    await page.click('#delete-block');await page.waitForFunction(id=>state.editions.find(e=>e.id===id).blocks.length===1,editionId);
-   await page.click('#undo-block');await page.waitForFunction(id=>state.editions.find(e=>e.id===id).blocks.length===2,editionId);
+   await page.click('#undo-block');await page.waitForFunction(id=>state.editions.find(e=>e.id===id).blocks.length===2&&document.querySelector('#undo-block')?.disabled===true,editionId);
+  });
+  await check('Todos os modelos e bloco personalizado',async()=>{
+   const presets=['Palavra do Síndico','Informações gerais','Atenção especial','Regras dos espaços','Convivência','Grade esportiva','Contatos','Matéria'];
+   for(const type of presets){
+    const before=await page.evaluate(id=>state.editions.find(e=>e.id===id).blocks.length,editionId);
+    await page.click('#add-block');await page.locator('#dialog [data-type='+JSON.stringify(type)+']').click();
+    await page.locator('#dialog').waitFor({state:'hidden'});assert.equal(await page.evaluate(id=>state.editions.find(e=>e.id===id).blocks.length,editionId),before+1);
+   }
+   const before=await page.evaluate(id=>state.editions.find(e=>e.id===id).blocks.length,editionId);
+   await page.click('#add-block');await page.fill('#custom-block-name','Prestação de contas');await page.click('#custom-block-form button[type=submit]');
+   await page.locator('#dialog').waitFor({state:'hidden'});assert.equal(await page.evaluate(id=>state.editions.find(e=>e.id===id).blocks.length,editionId),before+1);
+   const blocks=await page.evaluate(id=>state.editions.find(e=>e.id===id).blocks,editionId);
+   for(const type of [...presets,'Prestação de contas'])assert.ok(blocks.some(block=>block.type===type),type);
+   assert.match(blocks.find(block=>block.type==='Grade esportiva').body,/<table>/);
   });
   await check('Prévia sem publicação automática',async()=>{
    await page.click('#go-preview');await page.waitForURL(new RegExp('#previa/'+editionId));
@@ -74,6 +92,9 @@ assert(login&&password,'Credenciais sintéticas de QA ausentes.');
    await page.click('#logout');await page.locator('#login-form').waitFor();
    await page.fill('#login-form [name=login]',login);await page.fill('#login-form [name=password]',password);await page.click('#login-form button[type=submit]');
    await page.waitForFunction(()=>authSession?.display_name==='QA Navegador'&&state);
+  });
+  await check('Rota de informe inexistente não quebra a interface',async()=>{
+   await open('editor/informe-inexistente');await page.waitForURL(/#informes$/);assert.equal(pageErrors.length,0,pageErrors.join('\n'));
   });
  }finally{
   console.log(JSON.stringify({passed:checks.every(x=>x.passed),total:checks.length,checks}));await browser.close();

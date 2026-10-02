@@ -628,7 +628,9 @@ def static_file(filename):
 
 app.config['AUTH_COOKIE_SECURE'] = os.getenv('AUTH_COOKIE_SECURE', 'false').lower() == 'true'
 auth_service = register_auth(app, connect, auth_audit)
-app.config['AUTH_CAN_MANAGE_ACCOUNTS'] = lambda actor: authorize_request(actor, 'accounts.manage')
+app.config['AUTH_CAN_MANAGE_ACCOUNTS'] = lambda actor, condominium_id=None: authorize_request(
+    actor, 'accounts.manage', {'condominium_id': condominium_id} if condominium_id else None
+)
 register_editorial(app, connect, current_principal, require_session, auth_service.require_csrf,
                    authorize_request, validate, normalize, read_state, audit_event)
 register_ai(app,connect,current_principal,require_session,auth_service.require_csrf,authorize_request)

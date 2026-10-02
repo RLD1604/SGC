@@ -15,9 +15,7 @@ async function reviewWithAI(handle) {
   dialog.querySelector('.ai-cancel').onclick=close;
   dialog.addEventListener('cancel',event=>{event.preventDefault();close();});
   try {
-    const response=await fetch('/api/ai/status',{signal:controller.signal});
-    if(!response.ok)throw Error('Não foi possível consultar a IA.');
-    const config=await response.json();
+    const config=await authRequest('/api/ai/status',{signal:controller.signal});
     if(!dialog.isConnected)return;
     if(!config.enabled){status.textContent='A integração está preparada, mas falta configurar a chave gratuita Groq no servidor. Consulte IA e autorização na página Beta.';return;}
     if(segments.length>config.maxSegments||segments.reduce((sum,s)=>sum+s.text.length,0)>config.maxChars){status.textContent='Este campo é longo demais para uma revisão. Divida-o em blocos de até 6.000 caracteres e 100 trechos.';return;}
@@ -26,8 +24,9 @@ async function reviewWithAI(handle) {
   requestButton.onclick=async()=>{
     requestButton.disabled=true;status.textContent='Preparando sugestões… O texto original continua preservado.';
     try {
-      const response=await fetch('/api/ai/review',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({segments,consent:true}),signal:controller.signal});
-      const result=await response.json();if(!response.ok)throw Error(result.error||'Não foi possível revisar.');
+      const context=handle.documentContext?.();
+      if(!context)throw Error('Salve o documento antes de solicitar a revisão com IA.');
+      const result=await authRequest('/api/ai/review',{method:'POST',body:JSON.stringify({segments,consent:true,...context}),signal:controller.signal});
       if(!Array.isArray(result.changes))throw Error('Resposta inválida da IA.');
       changes=result.changes;
       if(changes.some(c=>!Number.isInteger(c.id)||!segments[c.id]||c.before!==segments[c.id].text||typeof c.after!=='string'))throw Error('As sugestões não correspondem ao texto enviado.');

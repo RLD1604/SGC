@@ -8,8 +8,10 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import math
 import os
 import sys
+import time
 import urllib.error
 import urllib.request
 from datetime import datetime, timezone
@@ -73,17 +75,58 @@ def question_set(kind: str, state: dict) -> dict:
     return questions
 
 
+def _number(value, minimum: float, maximum: float, label: str) -> float:
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise RuntimeError(f"Resposta Jev inválida em {label}: número esperado")
+    result = float(value)
+    if not math.isfinite(result) or not minimum <= result <= maximum:
+        raise RuntimeError(f"Resposta Jev inválida em {label}: fora da faixa")
+    return result
+
+
+def validate_response(response: dict, model: str, questions: dict) -> dict:
+    if not isinstance(response, dict) or response.get("model") != model:
+        raise RuntimeError("Resposta Jev inválida: modelo divergente")
+    answers = response.get("answers")
+    if not isinstance(answers, dict) or set(answers) != set(questions):
+        raise RuntimeError("Resposta Jev inválida: conjunto de respostas divergente")
+    usage = response.get("usage")
+    if not isinstance(usage, dict) or any(isinstance(usage.get(key), bool) or not isinstance(usage.get(key), int) or usage[key] < 0 for key in ("input_tokens", "output_tokens")):
+        raise RuntimeError("Resposta Jev inválida: uso de tokens ausente")
+    for key, question in questions.items():
+        answer = answers[key]
+        if not isinstance(answer, dict) or answer.get("type") != question["type"]:
+            raise RuntimeError(f"Resposta Jev inválida em {key}: tipo divergente")
+        kind = question["type"]
+        if kind == "score":
+            _number(answer.get("score"), 0, len(question["criteria"]) - 1, key + ".score")
+            _number(answer.get("confidence"), 0, 1, key + ".confidence")
+        elif kind == "choice":
+            if answer.get("choice") not in question["criteria"]:
+                raise RuntimeError(f"Resposta Jev inválida em {key}: escolha desconhecida")
+            _number(answer.get("confidence"), 0, 1, key + ".confidence")
+        elif kind == "noul":
+            _number(answer.get("noul"), 0, 1, key + ".noul")
+    return response
+
+
 def call_jev(api_key: str, model: str, state: dict, questions: dict, timeout: int) -> dict:
     body = json.dumps({"state": state, "model": model, "questions": questions}, ensure_ascii=False).encode("utf-8")
     request = urllib.request.Request(API_URL, data=body, method="POST", headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"})
-    try:
-        with urllib.request.urlopen(request, timeout=timeout) as response:
-            return json.load(response)
-    except urllib.error.HTTPError as error:
-        detail = error.read(800).decode("utf-8", "replace")
-        raise RuntimeError(f"TypeSafe respondeu HTTP {error.code}: {detail}") from error
-    except urllib.error.URLError as error:
-        raise RuntimeError(f"Não foi possível acessar TypeSafe: {error.reason}") from error
+    for attempt in range(3):
+        try:
+            with urllib.request.urlopen(request, timeout=timeout) as response:
+                if response.headers.get_content_type() != "application/json":
+                    raise RuntimeError("TypeSafe devolveu conteúdo não JSON")
+                return validate_response(json.load(response), model, questions)
+        except urllib.error.HTTPError as error:
+            if error.code not in (429, 500, 502, 503, 504) or attempt == 2:
+                raise RuntimeError(f"TypeSafe respondeu HTTP {error.code}") from error
+        except urllib.error.URLError as error:
+            if attempt == 2:
+                raise RuntimeError("Não foi possível acessar TypeSafe") from error
+        time.sleep(2 ** attempt)
+    raise RuntimeError("TypeSafe indisponível")
 
 
 def classify(answers: dict) -> tuple[str, list[str]]:
@@ -103,6 +146,9 @@ def classify(answers: dict) -> tuple[str, list[str]]:
         if key.endswith("__quality") and float(answer.get("score", 0)) < 2:
             if status != "reprovado": status = "revisao_humana"
             reasons.append(f"{key}: qualidade {float(answer.get('score', 0)):.2f}/3")
+        if (key.endswith("__factual_tone") or key.endswith("__source_alignment")) and float(answer.get("noul", 0)) < 0.65:
+            if status != "reprovado": status = "revisao_humana"
+            reasons.append(f"{key}: aderência {float(answer.get('noul', 0)):.2f}")
     return status, reasons
 
 
