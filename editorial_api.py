@@ -408,7 +408,14 @@ def register_editorial(app, connect, current_principal, require_session, require
         with connect() as conn, conn.cursor() as cur:
             cur.execute("SELECT condominium_id FROM media_references WHERE media_id=%s AND document_type=%s AND document_id=%s", (media_id, document_type, document_id))
             ref = cur.fetchone()
-            if not ref or not can(actor, permission, {"condominium_id": ref[0], "document_type": document_type, "document_id": document_id}, cur=cur):
+            target = {"condominium_id": ref[0], "document_type": document_type, "document_id": document_id} if ref else None
+            if target and document_type == "record":
+                cur.execute("SELECT m.author_user_id,r.document FROM record_metadata m JOIN records r ON r.id=m.record_id WHERE m.record_id=%s", (document_id,))
+                record = cur.fetchone()
+                if not record:
+                    return deny()
+                target.update(author_user_id=record[0], state=record[1].get("status", "draft"))
+            if not target or not can(actor, permission, target, cur=cur):
                 return deny()
             cur.execute("SELECT mime,content FROM media WHERE id=%s", (media_id,))
             row = cur.fetchone()

@@ -69,7 +69,16 @@ def question_set(kind: str, state: dict) -> dict:
             questions[f"{prefix}__source_alignment"] = {"type": "noul", "instructions": f"O conteúdo de `{path}` é compatível com suas referências em `{path}.sources` e com o restante do estado?"}
             questions[f"{prefix}__privacy_risk"] = {"type": "noul", "instructions": f"`{path}` expõe dado pessoal desnecessário, acusação sem fonte ou informação sensível imprópria?"}
         questions["edition__flow"] = {"type": "score", "instructions": "Avalie a progressão editorial de `edition.blocks`, da abertura ao encerramento, quanto à continuidade e ausência de repetição.", "criteria": QUALITY_LEVELS}
-        questions["edition__verdict"] = {"type": "choice", "instructions": "Decida se `edition` está coerente como informe completo e pronto para revisão final humana.", "criteria": VERDICT}
+        questions["edition__verdict"] = {
+            "type": "choice",
+            "instructions": (
+                "Decida se `edition` está coerente como informe completo e pode avançar para a revisão final humana obrigatória. "
+                "Escolha `aprovado` quando puder avançar sem correção editorial prévia; escolha `revisar` somente quando o "
+                "conteúdo precisar de correção antes dessa etapa. A existência da revisão humana obrigatória, por si só, "
+                "não é motivo para escolher `revisar`."
+            ),
+            "criteria": VERDICT,
+        }
     else:
         raise ValueError(f"grupo desconhecido: {kind}")
     return questions

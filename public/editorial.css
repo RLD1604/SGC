@@ -6,6 +6,7 @@
 @media(max-width:700px){.photo-editor-dialog{padding:8px}.photo-editor-dialog h2{font-size:18px}.photo-editor-dialog header button{padding:7px;font-size:12px}.photo-editor-host{height:64dvh}}
 .ai-review-dialog{width:min(1000px,94vw)}.ai-comparison{display:grid;grid-template-columns:1fr 1fr;gap:18px}.ai-change{border:1px solid #dce2eb;padding:16px;margin:14px 0;border-radius:10px}.ai-change input{width:20px;min-height:20px;vertical-align:middle}.ai-comparison p{white-space:pre-wrap;overflow-wrap:anywhere;font-weight:400}.ai-comparison>div{padding:12px;background:#f4f6f9;margin-top:10px}.ai-comparison>div+div{background:#edf5ef}.ai-review-dialog [hidden]{display:none!important}@media(max-width:650px){.ai-comparison{grid-template-columns:1fr}}
 .tox-tinymce {width:100%!important;max-width:100%;border:1px solid #c5ccd5!important;border-radius:8px!important;margin-top:10px}
+.tox .tox-edit-area__iframe {min-width:0!important;max-width:100%}
 .tox .processor-controls{display:flex;align-items:center;gap:14px;padding:8px 12px;background:#f3f1f8;border-bottom:1px solid #ded8e8;flex-shrink:0;font:13px/1.4 Arial,sans-serif;color:#514664}
 .tox .processor-toggle{border:1px solid #b9accb;border-radius:6px;background:white;color:#493461;padding:8px 12px;cursor:pointer;font:600 13px Arial,sans-serif;white-space:nowrap}
 .tox .processor-toggle:hover{background:#e9e3f2}.tox .processor-toggle:focus-visible{outline:3px solid #725492;outline-offset:2px}
