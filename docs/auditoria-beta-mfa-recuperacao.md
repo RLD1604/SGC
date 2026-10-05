@@ -25,6 +25,8 @@
 - Primeira navegação ocorreu antes de iniciar o servidor QA: aguardada saúde. Botão Sair fica oculto no menu mobile; teste passou a usar viewport desktop para essa ação, mantendo a conferência mobile do QR. Fluxo final completo passou sem erros de JavaScript.
 - Preparador de banco novo não tinha adaptador UUID registrado. A tentativa ficou em banco novo isolado e foi revertida pela transação; banco ativo permaneceu intacto. Corrigido, testado em clone QA e repetido com destino novo r2, com sucesso.
 - Um destino inicial de cópia de backup apontava para a raiz do workspace. Dump havia sido gerado antes da troca; cópia refeita dentro do repositório e verificada.
+- Verificador somente de leitura no VPS ficou sem permissão ao executar como root sem capabilities sobre o segredo do banco, que pertence ao usuário do app. Repetido em contêiner temporário somente de leitura com DAC_OVERRIDE para as três montagens necessárias; cinco convites aprovados, sem exibir tokens/hashes. Não alterou o app ou banco.
+- Cinco PDFs finais conferidos: uma página cada, token correspondente e nenhum token de outro participante, instruções de ambos os autenticadores e expiração. Previews de revisão usam token substituído, fora da pasta de entrega. Pasta privada com ACL restrita; manuais fora do Git.
 
 ## Preservação e verificação
 
