@@ -88,3 +88,8 @@ flowchart LR
   F --> G[HTML com fotos incorporadas]
   C --> H[Backup completo]
 ```
+# Perfis atuais
+
+O SGC usa **Operador** para preparar conteúdo e informes e **Administrador** para revisar, aprovar, publicar e administrar acessos no condomínio vinculado.
+
+Consulte [manual do Operador](docs/manual-operador.md), [manual do Administrador](docs/manual-administrador.md), [plano](docs/plano-dois-perfis.md) e [auditoria](docs/auditoria-dois-perfis.md). Documentos antigos com sete perfis descrevem versões anteriores.

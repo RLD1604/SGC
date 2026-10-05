@@ -7,10 +7,12 @@ from datetime import timedelta
 from auth import INVITATION_TIMEOUT, RECOVERY_TIMEOUT, generate_token, normalize_login, utcnow
 from server import connect, initialize
 
-ROLES = ('encarregado','supervisor','editor','gestor','sindico','administrador_tecnico','responsavel_acessos')
+ROLES = ('operador', 'administrador')
 
 
 def invite(login, name, roles, condominium='sqa'):
+    if len(roles) != 1 or roles[0] not in ROLES:
+        raise ValueError('Selecione um perfil: Operador ou Administrador.')
     normalized = normalize_login(login)
     raw, token_hash = generate_token()
     user_id, membership_id, invitation_id = uuid.uuid4(), uuid.uuid4(), uuid.uuid4()

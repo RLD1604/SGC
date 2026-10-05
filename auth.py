@@ -372,9 +372,9 @@ class AuthService:
         if not isinstance(display_name, str) or not display_name.strip() or len(display_name) > 200:
             return jsonify(error="Nome inválido."), 400
         roles = body.get("roles")
-        allowed_roles = {"encarregado", "supervisor", "editor", "gestor", "sindico", "administrador_tecnico", "responsavel_acessos"}
-        if not isinstance(roles, list) or not roles or any(role not in allowed_roles for role in roles):
-            return jsonify(error="Selecione ao menos um perfil permitido."), 400
+        allowed_roles = {"operador", "administrador"}
+        if not isinstance(roles, list) or len(roles) != 1 or any(not isinstance(role, str) or role not in allowed_roles for role in roles):
+            return jsonify(error="Selecione um perfil: Operador ou Administrador."), 400
         condominium_id = body.get("condominiumId") or ((current_principal() or {}).get("memberships") or [None])[0]
         if condominium_id not in (current_principal() or {}).get("memberships", []):
             return jsonify(error="Condomínio fora do seu escopo."), 403
@@ -391,9 +391,11 @@ class AuthService:
                    ON CONFLICT(login_normalized) DO UPDATE SET
                      display_name=EXCLUDED.display_name,login_display=EXCLUDED.login_display,
                      email=EXCLUDED.email,updated_at=now()
-                   WHERE users.status='invited'
+                   WHERE users.status='invited' AND NOT EXISTS
+                     (SELECT 1 FROM memberships existing_membership
+                      WHERE existing_membership.user_id=users.id AND existing_membership.condominium_id<>%s)
                    RETURNING id""",
-                (uuid.uuid4(), display_name.strip(), body.get("login").strip(), login, body.get("email")),
+                (uuid.uuid4(), display_name.strip(), body.get("login").strip(), login, body.get("email"), condominium_id),
             )
             row = cur.fetchone()
             if not row:
@@ -520,8 +522,6 @@ class AuthService:
         return response
 
     def disable_user(self, user_id):
-        if not self._can_manage():
-            return jsonify(error="Ação não permitida."), 403
         try:
             target = uuid.UUID(user_id)
         except (ValueError, TypeError):
@@ -531,21 +531,21 @@ class AuthService:
         if not isinstance(reason, str) or not reason.strip() or len(reason) > 1000:
             return jsonify(error="Informe o motivo da desativação."), 400
         actor = current_principal()
+        condominium_id = body.get('condominiumId') or (actor.get('memberships') or [None])[0]
+        if condominium_id not in actor.get('memberships', []) or not self._can_manage(condominium_id):
+            return jsonify(error="Ação não permitida."), 403
         if actor["user_id"] == str(target):
             return jsonify(error="Use outro administrador para desativar esta conta."), 409
         with self.connect() as conn, conn.cursor() as cur:
             cur.execute(
-                """UPDATE users SET status='disabled',disabled_at=now(),disabled_by=%s,
-                   disable_reason=%s,auth_generation=auth_generation+1,updated_at=now()
-                   WHERE id=%s AND status<>'disabled' RETURNING id""",
-                (actor["user_id"], reason.strip(), target),
+                """UPDATE memberships SET status='inactive',ends_at=now()
+                   WHERE user_id=%s AND condominium_id=%s AND status='active' RETURNING id""",
+                (target, condominium_id),
             )
             if not cur.fetchone():
                 return jsonify(error="Conta não encontrada ou já desativada."), 404
-            cur.execute("UPDATE sessions SET revoked_at=now(),revoke_reason='account_disabled' WHERE user_id=%s AND revoked_at IS NULL", (target,))
-            cur.execute("UPDATE invitations SET revoked_at=now() WHERE user_id=%s AND used_at IS NULL AND revoked_at IS NULL", (target,))
-            cur.execute("UPDATE recovery_tokens SET revoked_at=now() WHERE user_id=%s AND used_at IS NULL AND revoked_at IS NULL", (target,))
-        self._audit("account.disable", actor_user_id=actor["user_id"], subject_user_id=str(target), outcome="success", details={"reason": reason.strip()})
+            cur.execute("UPDATE role_grants SET revoked_at=now() WHERE user_id=%s AND condominium_id=%s AND revoked_at IS NULL", (target, condominium_id))
+        self._audit("membership.disable", actor_user_id=actor["user_id"], subject_user_id=str(target), outcome="success", details={"reason": reason.strip(), "condominiumId": condominium_id})
         return jsonify(status="ok")
 
 

@@ -2,6 +2,7 @@
 
 import hashlib
 import unittest
+from unittest.mock import MagicMock
 
 from flask import Flask, g
 
@@ -9,6 +10,39 @@ import auth
 
 
 class AuthPrimitiveTests(unittest.TestCase):
+    def test_disable_is_scoped_and_does_not_disable_global_user(self):
+        app=Flask(__name__)
+        app.config['AUTH_CAN_MANAGE_ACCOUNTS']=lambda actor, condo: condo=='sqa'
+        conn=MagicMock()
+        cur=conn.__enter__.return_value.cursor.return_value.__enter__.return_value
+        cur.fetchone.return_value=('membership',)
+        service=auth.register_auth(app,lambda:conn,None)
+        actor={'user_id':'00000000-0000-0000-0000-000000000001','memberships':['sqa']}
+        target='00000000-0000-0000-0000-000000000002'
+        with app.test_request_context('/',method='POST',json={'reason':'Teste','condominiumId':'outro'}):
+            g.principal=actor
+            _,status=service.disable_user(target)
+            self.assertEqual(status,403)
+            self.assertFalse(cur.execute.called)
+        with app.test_request_context('/',method='POST',json={'reason':'Teste','condominiumId':'sqa'}):
+            g.principal=actor
+            response=app.make_response(service.disable_user(target))
+            self.assertEqual(response.status_code,200,response.get_json())
+            self.assertEqual(len(cur.execute.call_args_list),2)
+            for call in cur.execute.call_args_list:
+                self.assertIn('condominium_id=%s',call.args[0])
+                self.assertEqual(call.args[1][1],'sqa')
+                self.assertNotIn('UPDATE users',call.args[0])
+
+    def test_invitation_rejects_legacy_multiple_and_malformed_profiles(self):
+        app=Flask(__name__)
+        app.config['AUTH_DELIVER_TOKEN']=lambda *args: None
+        service=auth.register_auth(app,lambda: self.fail('invalid profile reached database'),None)
+        for roles in (['editor'],['gestor'],[],['operador','administrador'],[{}],[None], 'operador'):
+            with self.subTest(roles=roles), app.test_request_context('/api/auth/invitations',method='POST',json={'login':'teste','displayName':'Teste','roles':roles}):
+                response,status=service.issue_invitation()
+                self.assertEqual(status,400)
+
     def test_normalize_login_is_nfkc_trimmed_and_casefolded(self):
         self.assertEqual(auth.normalize_login("  Usua\u0301RIO@EXEMPLO.COM  "), "usuário@exemplo.com")
         self.assertEqual(auth.normalize_login("ＦＵＮＣＩＯＮＡＲＩＯ"), "funcionario")

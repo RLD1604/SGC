@@ -92,6 +92,11 @@ ROLE_PERMISSIONS = {
     "responsavel_acessos": frozenset({ACCOUNTS_MANAGE}),
 }
 
+# Public profiles; legacy roles remain readable for historical approvals.
+PUBLIC_ROLES = ("operador", "administrador")
+ROLE_PERMISSIONS["operador"] = ROLE_PERMISSIONS["encarregado"] | ROLE_PERMISSIONS["editor"]
+ROLE_PERMISSIONS["administrador"] = ALL_PERMISSIONS
+
 ITEM_EDITABLE_STATES = frozenset({"draft", "fix"})
 ITEM_SUBMITTED_STATES = frozenset({"review", "ready"})
 EDITION_EDITABLE_STATES = frozenset({"draft", "preparation", "returned"})
@@ -316,9 +321,9 @@ def authorize_decision(
         # Gestor/sindico see submitted items in their condominium.  Optional
         # editors see only conferred sources needed to compose an edition.
         for grant in candidates:
-            if grant.role in {"gestor", "sindico"} and resource.status in ITEM_SUBMITTED_STATES:
+            if grant.role in {"gestor", "sindico", "administrador"} and resource.status in ITEM_SUBMITTED_STATES:
                 return _allow(permission, grant)
-            if grant.role == "editor" and resource.status == "ready":
+            if grant.role in {"editor", "operador"} and resource.status == "ready":
                 return _allow(permission, grant)
         return _deny(permission, "scope_denied")
 

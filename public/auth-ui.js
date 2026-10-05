@@ -1,8 +1,9 @@
 'use strict';
 let authSession=null,csrfToken='';
-function hasRole(...roles){return (authSession?.grants||[]).some(item=>roles.includes(item.role));}
-function canReviewRecords(){return hasRole('gestor','sindico');}
-function canApproveEditions(){return hasRole('gestor','sindico');}
+function currentRoleGrants(){const condo=authSession?.memberships?.[0];return (authSession?.grants||[]).filter(item=>item.condominium_id===condo);}
+function hasRole(...roles){return currentRoleGrants().some(item=>roles.includes(item.role));}
+function canReviewRecords(){return hasRole('administrador','gestor','sindico');}
+function canApproveEditions(){return hasRole('administrador','gestor','sindico');}
 
 async function authRequest(path,options={}){
  const headers={...(options.headers||{})};
@@ -30,10 +31,12 @@ async function ensureAuth(){
 }
 
 function applyIdentity(){
- const roles=new Set((authSession?.grants||[]).map(item=>item.role));
- role=(roles.has('gestor')||roles.has('sindico')||roles.has('editor'))?'editor':'funcionario';
+ const roles=new Set(currentRoleGrants().map(item=>item.role));
+ role=(roles.has('administrador')||roles.has('operador')||roles.has('gestor')||roles.has('sindico')||roles.has('editor'))?'editor':'funcionario';
  document.querySelector('.view-switch')?.remove();
- const identity=document.querySelector('.sidebar-bottom div');if(identity)identity.innerHTML=`${esc(authSession.display_name)}<small>Conta individual · Beta operacional</small>`;
+ const profile=roles.has('administrador')?'Administrador':roles.has('operador')?'Operador':'Conta individual';
+ const reviewLink=document.querySelector('[data-nav="revisao"]');if(reviewLink)reviewLink.hidden=!canReviewRecords();
+ const identity=document.querySelector('.sidebar-bottom div');if(identity)identity.innerHTML=`${esc(authSession.display_name)}<small>${profile}</small>`;
  const avatar=document.querySelector('.avatar');if(avatar)avatar.textContent=authSession.display_name.split(/\s+/).slice(0,2).map(x=>x[0]).join('').toUpperCase();
  if(!document.querySelector('#logout')){const button=document.createElement('button');button.id='logout';button.textContent='Sair';button.onclick=logout;document.querySelector('.sidebar-bottom')?.append(button);}
 }

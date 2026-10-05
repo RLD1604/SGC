@@ -1,0 +1,11 @@
+const fs=require('node:fs'),vm=require('node:vm'),assert=require('node:assert/strict');
+const source=fs.readFileSync(require('node:path').join(__dirname,'../public/auth-ui.js'),'utf8');
+const ctx=vm.createContext({});
+vm.runInContext(source,ctx);
+vm.runInContext("authSession={memberships:['sqa'],grants:[{condominium_id:'sqa',role:'operador'},{condominium_id:'outro',role:'administrador'}]}",ctx);
+assert.equal(vm.runInContext('canReviewRecords()',ctx),false);
+assert.equal(vm.runInContext('canApproveEditions()',ctx),false);
+vm.runInContext("authSession.grants[0].role='administrador'",ctx);
+assert.equal(vm.runInContext('canReviewRecords()',ctx),true);
+assert.equal(vm.runInContext('canApproveEditions()',ctx),true);
+console.log('PASS: two profiles and condominium isolation in UI');

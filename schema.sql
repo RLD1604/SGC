@@ -64,7 +64,7 @@ CREATE TABLE IF NOT EXISTS role_grants (
   membership_id uuid REFERENCES memberships(id),
   user_id uuid NOT NULL REFERENCES users(id),
   condominium_id text NOT NULL REFERENCES condominiums(id),
-  role text NOT NULL CHECK (role IN ('encarregado','supervisor','editor','gestor','sindico','administrador_tecnico','responsavel_acessos')),
+  role text NOT NULL CHECK (role IN ('operador','administrador','encarregado','supervisor','editor','gestor','sindico','administrador_tecnico','responsavel_acessos')),
   starts_at timestamptz NOT NULL DEFAULT now(),
   ends_at timestamptz,
   revoked_at timestamptz,
@@ -268,3 +268,36 @@ DROP TRIGGER IF EXISTS audit_events_immutable ON audit_events;
 CREATE TRIGGER audit_events_immutable BEFORE UPDATE OR DELETE ON audit_events FOR EACH ROW EXECUTE FUNCTION reject_immutable_change();
 
 INSERT INTO schema_versions(version) VALUES (6) ON CONFLICT DO NOTHING;
+
+-- Schema 7: two public profiles. Old grant IDs remain for historical approvals.
+ALTER TABLE role_grants DROP CONSTRAINT IF EXISTS role_grants_role_check;
+ALTER TABLE role_grants ADD CONSTRAINT role_grants_role_check CHECK
+  (role IN ('operador','administrador','encarregado','supervisor','editor','gestor','sindico','administrador_tecnico','responsavel_acessos'));
+DO $$
+DECLARE old_grant record; new_id uuid; new_role text;
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM schema_versions WHERE version=7) THEN
+    FOR old_grant IN
+      SELECT g.*,u.login_normalized FROM role_grants g JOIN users u ON u.id=g.user_id
+      WHERE g.role NOT IN ('operador','administrador')
+        AND (g.revoked_at IS NULL OR g.revoked_at>now())
+        AND (g.ends_at IS NULL OR g.ends_at>now())
+      FOR UPDATE OF g
+    LOOP
+      new_id := gen_random_uuid();
+      new_role := CASE
+        WHEN old_grant.condominium_id='sqa' AND old_grant.login_normalized='testador.sqa.03' THEN 'administrador'
+        WHEN old_grant.condominium_id='sqa' AND old_grant.login_normalized IN ('testador.sqa.01','testador.sqa.02') THEN 'operador'
+        WHEN old_grant.role IN ('encarregado','supervisor','editor') THEN 'operador'
+        ELSE 'administrador' END;
+      INSERT INTO role_grants(id,membership_id,user_id,condominium_id,role,starts_at,ends_at,revoked_at,granted_by,basis)
+        VALUES(new_id,old_grant.membership_id,old_grant.user_id,old_grant.condominium_id,new_role,
+          old_grant.starts_at,old_grant.ends_at,old_grant.revoked_at,old_grant.granted_by,'Migração auditada para dois perfis; origem '||old_grant.id);
+      INSERT INTO audit_events(id,condominium_id,subject_user_id,action,result,correlation_id,metadata)
+        VALUES(gen_random_uuid(),old_grant.condominium_id,old_grant.user_id,'roles.migrate.two_profiles','success',new_id::text,
+          jsonb_build_object('oldGrantId',old_grant.id,'newGrantId',new_id,'oldRole',old_grant.role,'newRole',new_role));
+      UPDATE role_grants SET revoked_at=now() WHERE id=old_grant.id;
+    END LOOP;
+    INSERT INTO schema_versions(version) VALUES(7);
+  END IF;
+END $$;
