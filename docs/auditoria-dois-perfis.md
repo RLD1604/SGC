@@ -8,11 +8,11 @@
 | Dois perfis | Operador e Administrador implementados no backend e nos convites; exatamente um perfil por convite. |
 | Histórico preservado | Grants antigos são revogados, não apagados; novos grants mantêm validade e revogação futura. Eventos registram IDs de origem e destino. |
 | Migração segura | Ensaio transacional revertido antes de aplicar; segunda execução sem criar novamente grants. Schema 7 local e VPS. |
-| Permissões e isolamento | 40 testes Python passaram, incluindo regressão, estados, expiração, revogação e desativação restrita ao condomínio; teste JavaScript passou. |
+| Permissões e isolamento | 40 testes Python passaram, incluindo regressão, estados, expiração, revogação e desativação restrita ao condomínio; teste JavaScript passou. Prova transacional no PostgreSQL local e VPS validou convite e desativação sem alterar outro vínculo; todos os dados sintéticos revertidos. |
 | Testadores SQA | 01 e 02 Operador; 03 Administrador, confirmado no PostgreSQL do VPS. |
 | Manuais | Dois PDFs de uma página, renderizados e revisados visualmente; fontes Markdown e gerador incluídos. Substituem instruções antigas de Editor. |
-| Implantação | Docker local saudável; imagem idêntica enviada ao VPS. Containers anteriores preservados. Saúde pública validada após primeiro deploy; revisão final r2 em validação. |
-| GitHub e Drive | Aguardando confirmação final após revisão r2. |
+| Implantação | Docker local e VPS saudáveis na versão 0.2.5-beta.1/schema 7. Mesma imagem sha256:02dd2ed8ec441966367c03f66cc37f82ef98f9e7ee617ca4621f88d3a1d0d5bf. Hashes de auth.py, authorization.py, schema.sql e auth-ui.js iguais. Containers anteriores preservados; outros 11 containers mantiveram nomes e imagens. |
+| GitHub e Drive | Código publicado na main (7d63d0f). Backup final 20261005T171633Z-de24f335: SHA-256 validado, Drive com exatamente quatro arquivos e last-success.json com mesmo runId/status success/files 4. Relatório final segue em commit documental separado. |
 
 ## Erros encontrados e tratamento
 
@@ -26,6 +26,9 @@
 8. Harness de teste podia importar fonte antiga da imagem: diretório de trabalho explicitamente /tests; suíte repetida com a fonte corrigida (40 testes OK).
 9. HTTP 404 transitório durante troca do container: repetição da saúde pública terminou com sucesso no primeiro deploy.
 10. Comando de conferência SQL tinha aspas incompatíveis com PowerShell: repetido via stdin, sem alterações ao banco.
+11. Integração SQL precisava registrar o adaptador UUID, como o servidor faz: corrigido; teste passou local e VPS, com rollback confirmado.
+12. Renovação da autorização do Drive não podia salvar rclone.conf sob ProtectSystem=strict: configuração renovável movida para /var/lib/sgc-backup-drive (pasta já autorizada para escrita). Original preservada, arquivos com permissão 0600; leitura autenticada e listagem dos quatro arquivos passaram. Backup final terminou com sucesso.
+13. Git interpretava PDFs como texto: adicionada regra binária para preservar documentos; diff --check passou.
 
 ## Limites e pendências de produto
 

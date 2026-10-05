@@ -1,6 +1,6 @@
 # Dois perfis — plano e auditoria
 
-Data: 2026-10-05. Estado: execução em andamento.
+Data: 2026-10-05. Estado: mudança dos dois perfis executada e auditada. Limites de produto documentados na auditoria.
 
 ## Contrato aprovado
 
@@ -28,3 +28,5 @@ Superusuário global não foi encontrado no código: não declarar essa função
 ## Evidências
 
 Backup local validado: condominio-20261005T165602Z-16e3fd47b9e448da99d758e184d9abf2.dump; SHA-256 F41C9B280D5BE5DEBE76B6509DC1D898946E1084B693C9662169355685807D82. Cópia externa deste backup ainda não configurada.
+
+Backup final VPS e Google Drive: 20261005T171633Z-de24f335, pacote cifrado e PostgreSQL com restauração verificada pelo serviço de backup. Drive confirmou quatro arquivos e integridade. Consulte a matriz de critérios e os erros corrigidos em [auditoria-dois-perfis.md](auditoria-dois-perfis.md).
