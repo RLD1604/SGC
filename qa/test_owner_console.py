@@ -5,11 +5,23 @@ from unittest.mock import MagicMock,patch
 from flask import Flask,g
 from datetime import datetime,timezone,timedelta
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]))
-from owner_console import matching_counter,totp,register_owner
+from owner_console import matching_counter,totp,register_owner,enrollment_qr
+import base64,io
+from PIL import Image
 from auth import require_session
 
 KEY='GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ'
 class Owner(unittest.TestCase):
+    def test_enrollment_qr_is_in_memory_png(self):
+        uri='otpauth://totp/SGC:qa?secret='+KEY+'&issuer=SGC&algorithm=SHA1&digits=6&period=30'
+        data=enrollment_qr(uri)
+        self.assertTrue(data.startswith('data:image/png;base64,'))
+        image=Image.open(io.BytesIO(base64.b64decode(data.split(',',1)[1])))
+        self.assertEqual(image.format,'PNG')
+        self.assertEqual(image.width,image.height)
+        self.assertGreater(image.width,200)
+        self.assertEqual(image.convert('L').getpixel((0,0)),255)
+
     def test_rfc_totp_and_replay(self):
         self.assertEqual(totp(KEY,1),'287082')
         self.assertEqual(matching_counter(KEY,'287082',now=59,last_counter=-1),1)

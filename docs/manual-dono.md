@@ -3,7 +3,7 @@
 Acesse https://sq.srv1178310.hstgr.cloud/SGC/owner.html e entre com `rodrigo` e sua senha atual.
 
 1. Informe novamente sua senha para configurar o autenticador.
-2. No aplicativo autenticador do seu telefone, adicione uma conta usando a chave mostrada na tela, com códigos baseados em tempo. Guarde essa chave em local privado; não a envie a operadores nem em mensagens.
+2. No Google Authenticator, toque em **+ → Ler código QR**. No Microsoft Authenticator, escolha **Adicionar conta → Outra conta → Escanear código QR**. Aponte a câmera para o QR mostrado no SGC. Se estiver usando apenas o telefone, abra **Não consigo escanear** para cadastrar a chave manualmente, com código baseado em tempo. Guarde a chave em local privado; não envie a chave nem o QR a operadores ou em mensagens.
 3. Informe a senha e o código de seis números exibido pelo autenticador para abrir o painel.
 4. Consulte os indicadores e filtre os eventos por usuário, condomínio, ação, resultado ou código de atendimento.
 5. Use **Bloquear** ao terminar. A autorização adicional expira após 15 minutos. Sair encerra a sessão.

@@ -633,7 +633,7 @@ def _html_file(filename):
         content = content.replace('<head>', f'<head><base href="{APP_BASE_PATH}/"><meta name="sqa-base-path" content="{APP_BASE_PATH}">', 1)
     headers={'Cache-Control':'no-cache'}
     if filename=='owner.html':
-        headers.update({'Cache-Control':'no-store','Content-Security-Policy':"default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'",'X-Frame-Options':'DENY','Referrer-Policy':'no-referrer'})
+        headers.update({'Cache-Control':'no-store','Content-Security-Policy':"default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'",'X-Frame-Options':'DENY','Referrer-Policy':'no-referrer'})
     return Response(content, mimetype='text/html', headers=headers)
 
 

@@ -2,6 +2,7 @@
 import base64
 import hashlib
 import hmac
+import io
 import os
 import re
 import struct
@@ -12,6 +13,17 @@ from datetime import datetime, timezone
 from urllib.parse import quote
 from flask import g, request, jsonify
 from auth import verify_password
+import qrcode
+
+
+def enrollment_qr(uri):
+    """Render locally in memory; never send the enrollment secret to a QR service."""
+    qr=qrcode.QRCode(error_correction=qrcode.constants.ERROR_CORRECT_M,box_size=8,border=4)
+    qr.add_data(uri)
+    qr.make(fit=True)
+    output=io.BytesIO()
+    qr.make_image(fill_color='black',back_color='white').save(output,format='PNG')
+    return 'data:image/png;base64,'+base64.b64encode(output.getvalue()).decode('ascii')
 
 
 def totp(secret,counter):
@@ -90,7 +102,7 @@ def register_owner(app,connect,require_session,require_mutation):
                 if enrolled:return jsonify(error='Autenticador já configurado.'),409
                 # Returned only after authenticated owner + CSRF + password.
                 uri=f'otpauth://totp/{quote("SGC:rodrigo")}?secret={key}&issuer=SGC&algorithm=SHA1&digits=6&period=30'
-                return jsonify(setupKey=key,setupUri=uri)
+                return jsonify(setupKey=key,setupUri=uri,setupQr=enrollment_qr(uri))
             counter=matching_counter(key,body.get('code'),last_counter=last)
             if counter is None:return jsonify(error='Confirmação inválida ou código já utilizado.'),403
             cur.execute('UPDATE owner_access_state SET last_counter=%s,enrolled_at=COALESCE(enrolled_at,now()),attempts=0 WHERE user_id=%s',(counter,actor['user_id']))

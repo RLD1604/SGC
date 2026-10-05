@@ -15,9 +15,13 @@ function code(){let bits=0,value=0,bytes=[];for(const c of key){value=(value<<5)
   await page.locator('#owner-unlock').waitFor();
   await page.fill('#owner-unlock [name=password]',password);await page.click('#owner-setup');await page.locator('#setup-area:not([hidden])').waitFor();
   assert.equal(await page.locator('#setup-key').textContent(),key);
+  assert(await page.locator('#setup-qr').evaluate(img=>img.complete&&img.naturalWidth>200));
+  assert((await page.locator('#setup-qr').getAttribute('src')).startsWith('data:image/png;base64,'));
+  await page.setViewportSize({width:390,height:844});assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
+  await page.setViewportSize({width:1365,height:900});
   await page.fill('#owner-unlock [name=code]',code());await page.click('#owner-unlock [type=submit]');
   await page.locator('#event-filters').waitFor();await page.locator('#events tr').first().waitFor();
-  assert.equal(await page.locator('#setup-key').count(),0);
+  assert.equal(await page.locator('#setup-key').count(),0);assert.equal(await page.locator('#setup-qr').count(),0);
   assert.equal(await page.locator('[type=password]').count(),0);
   await page.screenshot({path:path.join(root,'qa/results/owner-desktop.png'),fullPage:true});
   await page.setViewportSize({width:390,height:844});
