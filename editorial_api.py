@@ -201,18 +201,28 @@ def register_editorial(app, connect, current_principal, require_session, require
         with connect() as conn, conn.cursor() as cur:
             cur.execute("SELECT r.document,m.condominium_id,m.author_user_id,m.current_revision FROM records r JOIN record_metadata m ON m.record_id=r.id WHERE r.id=%s FOR UPDATE", (record_id,))
             row = cur.fetchone()
-            if not row or not can(actor, "item.edit", resource((row[1], row[2], row[3]), row[0]), cur=cur):
+            if not row:
                 return deny()
+            candidate=_internalize_media(dict(incoming))
+            trash_changed=bool(candidate.get('deletedAt'))!=bool(row[0].get('deletedAt'))
+            permission='item.read' if trash_changed else 'item.edit'
+            if not can(actor,permission,resource((row[1],row[2],row[3]),row[0]),cur=cur):return deny()
+            if trash_changed and not can(actor,'accounts.manage',{'condominium_id':row[1]},cur=cur):return deny(False)
             if row[3] != expected:
                 return jsonify(error="O registro foi alterado por outra pessoa.", currentRevision=row[3]), 409
-            document = _internalize_media(dict(incoming))
+            document = candidate
+            if trash_changed:
+                allowed={'deletedAt','history','revision'}
+                if any(candidate.get(key)!=row[0].get(key) for key in (set(candidate)|set(row[0]))-allowed):
+                    return jsonify(error='A lixeira deve preservar o conteúdo do registro.'),400
+                document=dict(row[0]);at=datetime.now(timezone.utc).isoformat()
+                if candidate.get('deletedAt'):document['deletedAt']=at
+                else:document.pop('deletedAt',None)
+                document['history']=[*document.get('history',[]),{'at':at,'text':'Movido para a lixeira' if candidate.get('deletedAt') else 'Restaurado da lixeira'}]
             document["id"] = record_id
             document["revision"] = expected + 1
             # Workflow changes use dedicated action endpoints.
             document["status"] = row[0].get("status", "draft")
-            trash_changed=bool(document.get('deletedAt'))!=bool(row[0].get('deletedAt'))
-            if trash_changed and not can(actor,'accounts.manage',{'condominium_id':row[1]},cur=cur):
-                return deny(False)
             changed_fields=[key for key in ('title','text','category','local','date','who','progress','photos','deletedAt','feedback','feedbackHtml') if document.get(key)!=row[0].get(key)]
             state = read_state(cur)
             state["records"] = [document if item["id"] == record_id else item for item in state["records"]]

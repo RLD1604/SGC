@@ -28,11 +28,13 @@
 - Verificador somente de leitura no VPS ficou sem permissão ao executar como root sem capabilities sobre o segredo do banco, que pertence ao usuário do app. Repetido em contêiner temporário somente de leitura com DAC_OVERRIDE para as três montagens necessárias; cinco convites aprovados, sem exibir tokens/hashes. Não alterou o app ou banco.
 - Cinco PDFs finais conferidos: uma página cada, token correspondente e nenhum token de outro participante, instruções de ambos os autenticadores e expiração. Previews de revisão usam token substituído, fora da pasta de entrega. Pasta privada com ACL restrita; manuais fora do Git.
 
+- Revisão final da lixeira revelou bloqueio ao arquivar registro conferido. API passou a exigir leitura autorizada e perfil Administrador, preservar conteúdo e estado, rejeitar alteração de texto junto da operação e registrar revisão. Interface esconde lixeira do Operador. Integração QA _i aprovou arquivamento/restauração de registro ready e rejeitou adulteração; 65 regressões e privacidade Node repetidas com sucesso. Primeira chamada QA tinha PYTHONPATH ausente: corrigida somente a configuração do comando, sem alteração de banco ativo.
+
 ## Preservação e verificação
 
 Dump inicial transferido do VPS para Desktop: SHA-256 `b4d035c9a059436e0f0bfe7aaeba1d88c148277f1c404acf31173dda48f673ee`.
 
-Imagem final Desktop/VPS: `sha256:8bb1cb3836acc524b777a942e97ccc8a278b3eeb296372b49b69e29e3ebba00c`. Saúde pública status=ok, schema 10. Evidências VPS: `/opt/sgc-codex-20260925/evidence/stage9-beta-mfa-20261005`.
+Imagem final Desktop/VPS: `sha256:03130952c0fe95152b73358aeb5c3fd348ea306693c3881f32a4aa96f1af005d`. Saúde pública status=ok, schema 10. Evidências VPS: `/opt/sgc-codex-20260925/evidence/stage9-beta-mfa-trash-final-20261005`.
 
 O banco anterior de cada ambiente permanece como condominio_pre_beta_20261005, com leitura somente por padrão. O alvo preparatório que falhou não substituiu banco ativo. Nenhum banco de outro projeto foi alterado. Não há espelhamento contínuo: os dois ambientes receberam a mesma base inicial, depois podem divergir.
 

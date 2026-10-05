@@ -85,10 +85,22 @@ with contextlib.redirect_stdout(captured):
     # Existing policy conceals another author's unassigned draft even from admin.
     assert admin.patch('/api/records/'+document_id,json={'document':trashed,'expectedRevision':2},headers=admin_headers).status_code==404
     admin_doc={**document,'id':str(uuid.uuid4())}
-    assert admin.post('/api/records',json={'document':admin_doc,'condominiumId':'sqa'},headers=admin_headers).status_code==201
+    admin_created=admin.post('/api/records',json={'document':admin_doc,'condominiumId':'sqa'},headers=admin_headers)
+    assert admin_created.status_code==201
+    admin_doc=admin_created.get_json()['document']
     admin_trash={**admin_doc,'deletedAt':'2026-10-05T20:00:00Z'}
     assert admin.patch('/api/records/'+admin_doc['id'],json={'document':admin_trash,'expectedRevision':1},headers=admin_headers).status_code==200
     assert admin.patch('/api/records/'+admin_doc['id'],json={'document':admin_doc,'expectedRevision':2},headers=admin_headers).status_code==200
+    with connect() as conn,conn.cursor() as cur:
+        cur.execute("UPDATE records SET document=jsonb_set(document,'{status}','\"ready\"') WHERE id=%s",(admin_doc['id'],))
+    ready=next(row for row in admin.get('/api/workspace').get_json()['state']['records'] if row['id']==admin_doc['id'])
+    ready_trash={**ready,'deletedAt':'2026-10-05T20:00:00Z'}
+    assert admin.patch('/api/records/'+ready['id'],json={'document':{**ready_trash,'title':'tampered'},'expectedRevision':3},headers=admin_headers).status_code==400
+    archived=admin.patch('/api/records/'+ready['id'],json={'document':ready_trash,'expectedRevision':3},headers=admin_headers)
+    assert archived.status_code==200,archived.get_json()
+    restored=admin.patch('/api/records/'+ready['id'],json={'document':ready,'expectedRevision':4},headers=admin_headers)
+    assert restored.status_code==200 and restored.get_json()['document']['status']=='ready'
+    assert restored.get_json()['document']['title']==ready['title']
     with connect() as conn,conn.cursor() as cur:
         cur.execute("SELECT metadata FROM diagnostic_events WHERE actor_user_id=%s AND action='document_view'",(accounts[3][1],));metadata=cur.fetchone()[0];assert metadata['resource']['id']==document_id
         cur.execute("SELECT count(*) FROM diagnostic_events WHERE actor_user_id=%s AND action='record.edit' AND metadata->'resource'->>'record_id'=%s",(accounts[3][1],document_id));assert cur.fetchone()[0]==1

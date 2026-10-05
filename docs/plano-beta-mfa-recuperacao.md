@@ -21,4 +21,5 @@
 - Backups antigos contêm dados anteriores e serão preservados, não tratados como base inicial limpa.
 - A autoridade global continua separada do perfil administrador. Conteúdo global do dono permanece fora desta entrega conforme decisão anterior.
 
-Estado: planejamento/revisão concluídos; implementação em andamento.
+Estado: planejamento, implementação e revisão concluídos; testes aprovados. Publicação e recibo externo documentados na auditoria.
+
