@@ -7,6 +7,7 @@ function canApproveEditions(){return hasRole('administrador','gestor','sindico')
 
 async function authRequest(path,options={}){
  const headers={...(options.headers||{})};
+ if(authSession?.ownerSpace&&!path.startsWith('/api/owner/')&&!path.startsWith('/api/auth/'))headers['X-SGC-Owner-Space']=authSession.ownerSpace.id;
  if(options.body&&!headers['Content-Type'])headers['Content-Type']='application/json';
  if(options.method&&options.method!=='GET'&&csrfToken)headers['X-CSRF-Token']=csrfToken;
  let response;
@@ -28,7 +29,7 @@ function renderLogin(message=''){
 }
 
 async function ensureAuth(){
- try{const result=await authRequest('/api/auth/session');authSession=result.principal;csrfToken=result.csrf_token;if(result.mfaRequired){await renderUserMfa();return false;}document.body.classList.remove('auth-required');applyIdentity();return true;}
+ try{const result=await authRequest('/api/auth/session');authSession=result.principal;csrfToken=result.csrf_token;if(result.mfaRequired){await renderUserMfa();return false;}if(authSession.platformOwner&&!authSession.ownerVerified&&!location.pathname.endsWith('/owner.html')){location.href='./owner.html';return false;}document.body.classList.remove('auth-required');applyIdentity();if(authSession.ownerSpace&&!location.pathname.endsWith('/owner.html')){const banner=document.createElement('p');banner.className='owner-space-note';banner.textContent='Dono · '+authSession.ownerSpace.name+' · ';const link=document.createElement('a');link.href='./owner.html';link.textContent='Trocar espaço / painel do dono';banner.append(link);document.querySelector('#main')?.before(banner);}return true;}
  catch(error){renderLogin(error.message);return false;}
 }
 
@@ -36,7 +37,7 @@ function applyIdentity(){
  const roles=new Set(currentRoleGrants().map(item=>item.role));
  role=(roles.has('administrador')||roles.has('operador')||roles.has('gestor')||roles.has('sindico')||roles.has('editor'))?'editor':'funcionario';
  document.querySelector('.view-switch')?.remove();
- const profile=roles.has('administrador')?'Administrador':roles.has('operador')?'Operador':'Conta individual';
+ const profile=authSession.platformOwner?'Dono da plataforma':roles.has('administrador')?'Administrador':roles.has('operador')?'Operador':'Conta individual';
  const reviewLink=document.querySelector('[data-nav="revisao"]');if(reviewLink)reviewLink.hidden=!canReviewRecords();
  const identity=document.querySelector('.sidebar-bottom div');if(identity)identity.innerHTML=`${esc(authSession.display_name)}<small>${profile}</small>`;
  const avatar=document.querySelector('.avatar');if(avatar)avatar.textContent=authSession.display_name.split(/\s+/).slice(0,2).map(x=>x[0]).join('').toUpperCase();

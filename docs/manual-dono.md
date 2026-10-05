@@ -2,13 +2,13 @@
 
 Acesse https://sq.srv1178310.hstgr.cloud/SGC/owner.html e entre com `rodrigo` e sua senha atual.
 
-1. Informe novamente sua senha para configurar o autenticador.
+1. Sua conta, senha e autenticador atuais continuam válidos. Se o autenticador já estiver configurado, use-o e siga para a confirmação do passo 3. Só configure um QR quando o app solicitar a primeira configuração.
 2. No Google Authenticator, toque em **+ → Ler código QR**. No Microsoft Authenticator, escolha **Adicionar conta → Outra conta → Escanear código QR**. Aponte a câmera para o QR mostrado no SGC. Se estiver usando apenas o telefone, abra **Não consigo escanear** para cadastrar a chave manualmente, com código baseado em tempo. Guarde a chave em local privado; não envie a chave nem o QR a operadores ou em mensagens.
 3. Informe a senha e o código de seis números exibido pelo autenticador para abrir o painel.
 4. Consulte os indicadores e filtre os eventos por usuário, condomínio, ação, resultado ou código de atendimento.
 5. Use **Bloquear** ao terminar. A autorização adicional expira após 15 minutos. Sair encerra a sessão.
 
-O painel é exclusivo do dono e consulta metadados operacionais. Não abre globalmente textos, fotos ou documentos dos clientes. Os perfis de condomínio continuam sendo Operador e Administrador; nenhum deles permite promover uma pessoa a dono.
+O painel é exclusivo do dono. Após confirmar senha e autenticador, use Todos os espaços → Abrir para acessar cada condomínio, inclusive textos, fotos e rascunhos privados. Sua identidade permanece rodrigo e suas ações ficam auditadas. Na área de trabalho, use Trocar espaço / painel do dono para escolher outro. O acesso global expira em 15 minutos e exige nova confirmação. Rascunhos locais do dono são separados por condomínio. Prefira trabalhar em um espaço por vez: trocar em outra aba bloqueia operações na aba anterior até reabri-la. As regras de revisão, publicação imutável e conferência por outra pessoa continuam vigentes. Os perfis de condomínio continuam sendo Operador e Administrador; nenhum deles permite promover uma pessoa a dono.
 
 Os operadores não precisam ativar logs. Se uma ação falhar, devem informar ao dono o código de atendimento mostrado na tela e o que tentavam fazer, sem enviar senha ou token. Eventos relatados pelo navegador são identificados como relatos, não como confirmação de salvamento.
 

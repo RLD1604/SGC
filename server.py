@@ -22,7 +22,7 @@ from auth import register_auth, current_principal, require_session
 from authorization import Grant, Principal, Resource, authorize_decision
 from editorial_api import register_editorial
 from observability import register_observability
-from owner_console import register_owner
+from owner_console import register_owner, owner_access, OWNER_SPACE_BASIS
 from user_security import register_user_security
 
 ROOT = Path(__file__).parent
@@ -94,12 +94,15 @@ def auth_audit(action, *, actor_user_id=None, subject_user_id=None, outcome='suc
 
 def _authorization_principal(actor, condominium_id, cur):
     """Reload grants from PostgreSQL; browser roles are never trusted."""
+    is_owner,verified=owner_access(cur,actor)
+    if is_owner and (not verified or condominium_id not in actor.get('memberships',[])):return None
+    if is_owner and request.headers.get('X-SGC-Owner-Space') and request.headers['X-SGC-Owner-Space']!=condominium_id:return None
     cur.execute("SELECT id FROM memberships WHERE user_id=%s AND condominium_id=%s AND status='active' AND (starts_at IS NULL OR starts_at<=now()) AND (ends_at IS NULL OR ends_at>now())", (actor['user_id'], condominium_id))
     membership = cur.fetchone()
     if not membership:
         return None
     membership_id = str(membership[0])
-    cur.execute("SELECT id,role,starts_at,ends_at,revoked_at FROM role_grants WHERE user_id=%s AND condominium_id=%s", (actor['user_id'], condominium_id))
+    cur.execute("SELECT id,role,starts_at,ends_at,revoked_at FROM role_grants WHERE user_id=%s AND condominium_id=%s AND (basis<>%s OR %s)", (actor['user_id'], condominium_id,OWNER_SPACE_BASIS,verified))
     grants = tuple(Grant(role=row[1], condominium_id=condominium_id, membership_id=membership_id,
                          grant_id=str(row[0]), valid_from=row[2], valid_until=row[3], revoked_at=row[4])
                    for row in cur.fetchall())
@@ -128,6 +131,7 @@ def authorize_request(actor, permission, resource=None, *, cur=None, return_gran
                 author_row = cursor.fetchone()
                 author_membership_id = str(author_row[0]) if author_row else None
             assigned = set()
+            if owner_access(cursor,actor)==(True,True):assigned.add(principal.membership_id)
             document_id = (resource or {}).get('document_id')
             if document_id:
                 cursor.execute("SELECT 1 FROM document_assignments WHERE condominium_id=%s AND document_type=%s AND document_id=%s AND user_id=%s AND revoked_at IS NULL AND valid_from<=now() AND (valid_until IS NULL OR valid_until>now())", (condominium_id, 'record' if kind == 'item' else 'edition', document_id, actor['user_id']))

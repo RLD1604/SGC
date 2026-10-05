@@ -16,4 +16,4 @@ with connect() as conn,conn.cursor() as cur:
     cur.execute('INSERT INTO platform_owner_grants(user_id) VALUES(%s) ON CONFLICT(user_id) DO NOTHING RETURNING user_id',(row[0],))
     if cur.fetchone():
         cur.execute("INSERT INTO audit_events(id,subject_user_id,action,result,correlation_id,metadata) VALUES(%s,%s,'platform.owner.bootstrap','success',%s,%s)",(uuid.uuid4(),row[0],str(uuid.uuid4()),Json({'mfaRequired':True,'provisionedBy':'host-cli'})))
-print('OWNER_PREPARED: rodrigo; MFA enrollment required; no global editorial access')
+print('OWNER_PREPARED: rodrigo; global spaces available only with confirmed MFA')

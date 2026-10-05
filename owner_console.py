@@ -1,4 +1,4 @@
-"""Read-only platform diagnostics behind an exclusive grant and step-up MFA."""
+"""Platform diagnostics and owner space access behind an exclusive grant and step-up MFA."""
 import base64
 import hashlib
 import hmac
@@ -7,13 +7,25 @@ import os
 import re
 import struct
 import time
+import uuid
 from functools import wraps
 from pathlib import Path
 from datetime import datetime, timezone
 from urllib.parse import quote
 from flask import g, request, jsonify
 from auth import verify_password
+from psycopg2.extras import Json
 import qrcode
+
+OWNER_SPACE_BASIS='Acesso global do dono confirmado por MFA'
+
+def owner_access(cur,actor):
+    """Reload exclusive ownership and live MFA proof; never trust browser roles."""
+    if not actor:return False,False
+    cur.execute('SELECT 1 FROM platform_owner_grants WHERE user_id=%s AND revoked_at IS NULL AND starts_at<=now()',(actor['user_id'],))
+    if not cur.fetchone():return False,False
+    cur.execute('SELECT 1 FROM owner_session_proofs p JOIN owner_access_state a ON a.user_id=p.user_id WHERE p.user_id=%s AND p.session_id=%s AND p.expires_at>now() AND a.enrolled_at IS NOT NULL AND p.secret_fingerprint=a.secret_fingerprint',(actor['user_id'],actor['session_id']))
+    return True,bool(cur.fetchone())
 
 
 def enrollment_qr(uri):
@@ -69,6 +81,40 @@ def register_owner(app,connect,require_session,require_mutation):
         return wrapped
 
     app.extensions['owner_require']=protected
+
+    def enrich(actor):
+        with connect() as conn,conn.cursor() as cur:
+            is_owner,verified=owner_access(cur,actor)
+            if not is_owner:return actor
+            actor['platformOwner']=True;actor['ownerVerified']=verified
+            selected=request.cookies.get('sgc_owner_space','sqa')
+            cur.execute('SELECT name FROM condominiums WHERE id=%s',(selected,))
+            row=cur.fetchone()
+            if verified and row:
+                actor['memberships']=[selected]
+                actor['grants']=[{'condominium_id':selected,'role':'administrador'}]
+                actor['ownerSpace']={'id':selected,'name':row[0]}
+            return actor
+    app.config['AUTH_OWNER_CONTEXT']=enrich
+
+    @app.post('/api/owner/spaces/<space_id>/enter')
+    @protected
+    @require_mutation
+    def enter_space(space_id):
+        actor=g.principal
+        with connect() as conn,conn.cursor() as cur:
+            cur.execute('SELECT name FROM condominiums WHERE id=%s',(space_id,))
+            row=cur.fetchone()
+            if not row:return jsonify(error='Espaço não encontrado.'),404
+            cur.execute("INSERT INTO memberships(id,user_id,condominium_id,status) VALUES(%s,%s,%s,'active') ON CONFLICT(user_id,condominium_id) DO UPDATE SET status='active',ends_at=NULL RETURNING id",(uuid.uuid4(),actor['user_id'],space_id))
+            membership=cur.fetchone()[0]
+            cur.execute("SELECT id FROM role_grants WHERE membership_id=%s AND role='administrador' AND revoked_at IS NULL AND starts_at<=now() AND (ends_at IS NULL OR ends_at>now())",(membership,))
+            if not cur.fetchone():
+                cur.execute("INSERT INTO role_grants(id,membership_id,user_id,condominium_id,role,granted_by,basis) VALUES(%s,%s,%s,%s,'administrador',%s,%s)",(uuid.uuid4(),membership,actor['user_id'],space_id,actor['user_id'],OWNER_SPACE_BASIS))
+            cur.execute("INSERT INTO audit_events(id,actor_user_id,action,result,correlation_id,metadata) VALUES(%s,%s,'owner.space.enter','success',%s,%s)",(uuid.uuid4(),actor['user_id'],getattr(g,'request_id',str(uuid.uuid4())),Json({'condominiumId':space_id})))
+        response=jsonify(status='ok',space={'id':space_id,'name':row[0]})
+        response.set_cookie('sgc_owner_space',space_id,httponly=True,secure=bool(app.config.get('AUTH_COOKIE_SECURE')),samesite='Lax',path=app.config.get('AUTH_COOKIE_PATH','/'),max_age=900)
+        return response
 
     @app.get('/api/owner/status')
     @require_session
@@ -179,7 +225,7 @@ def register_owner(app,connect,require_session,require_mutation):
         with connect() as conn,conn.cursor() as cur:
             cur.execute("SELECT result,count(*) FROM diagnostic_events WHERE occurred_at>now()-interval '24 hours' GROUP BY result")
             results=dict(cur.fetchall())
-            cur.execute('SELECT id,name,active FROM condominiums ORDER BY name LIMIT 200')
+            cur.execute('SELECT id,name,active FROM condominiums ORDER BY name')
             condos=[{'id':row[0],'name':row[1],'active':row[2]} for row in cur.fetchall()]
             cur.execute('SELECT login_display,id FROM users WHERE id IN (SELECT DISTINCT actor_user_id FROM diagnostic_events WHERE occurred_at>now()-interval \'90 days\') ORDER BY login_display LIMIT 200')
             users=[{'id':str(row[1]),'name':row[0]} for row in cur.fetchall()]

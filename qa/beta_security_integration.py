@@ -134,5 +134,35 @@ with contextlib.redirect_stdout(captured):
     public.post('/api/auth/recovery/request',json={'login':'rodrigo'})
     rid=owner.get('/api/owner/recovery-requests').get_json()['requests'][0]['id']
     assert owner.post('/api/owner/recovery-requests/'+rid+'/resolve',json=body,headers=owner_headers).status_code==403
+    # Owner selects every space under a live proof; ordinary admins stay isolated.
+    assert clients[4][0].post('/api/owner/spaces/sqa/enter',json={},headers=clients[4][1]).status_code==403
+    assert owner.post('/api/owner/spaces/sqa/enter',json={}).status_code==403
+    assert owner.post('/api/owner/spaces/missing/enter',json={},headers=owner_headers).status_code==404
+    assert owner.post('/api/owner/spaces/sqa/enter',json={},headers=owner_headers).status_code==200
+    original=next(r for r in owner.get('/api/workspace').get_json()['state']['records'] if r['id']==document_id)
+    assert owner.patch('/api/records/'+document_id,json={'document':{**original,'title':'Owner edit'},'expectedRevision':original['revision']},headers=owner_headers).status_code==200
+    with connect() as conn,conn.cursor() as cur:
+        cur.execute("INSERT INTO condominiums(id,name) VALUES('qa-other-space','Other QA')")
+        other_id=str(uuid.uuid4())
+        from psycopg2.extras import Json
+        cur.execute('INSERT INTO records(id,document) VALUES(%s,%s)',(other_id,Json({**document,'id':other_id})))
+        cur.execute("INSERT INTO record_metadata(record_id,condominium_id,author_user_id,current_revision) VALUES(%s,'qa-other-space',%s,1)",(other_id,accounts[3][1]))
+    assert owner.post('/api/owner/spaces/qa-other-space/enter',json={},headers=owner_headers).status_code==200
+    workspace=owner.get('/api/workspace').get_json()['state']
+    assert [r['id'] for r in workspace['records']]==[other_id]
+    assert owner.get('/api/workspace',headers={'X-SGC-Owner-Space':'sqa'}).status_code==409
+    assert owner.patch('/api/records/'+other_id,json={'document':document,'expectedRevision':1},headers={**owner_headers,'X-SGC-Owner-Space':'sqa'}).status_code==404
+    session=owner.get('/api/auth/session').get_json()['principal']
+    assert session['ownerSpace']['id']=='qa-other-space' and session['ownerVerified']
+    clients[4][0].set_cookie('sgc_owner_space','qa-other-space',path=app.config.get('AUTH_COOKIE_PATH','/'))
+    assert other_id not in [r['id'] for r in clients[4][0].get('/api/workspace').get_json()['state']['records']]
+    assert clients[4][0].patch('/api/records/'+other_id,json={'document':document,'expectedRevision':1},headers=clients[4][1]).status_code==404
+    with connect() as conn,conn.cursor() as cur:cur.execute("UPDATE owner_session_proofs SET expires_at=now()-interval '1 second' WHERE user_id=%s",(owner_id,))
+    assert owner.get('/api/workspace').status_code==403
+    assert owner.post('/api/owner/spaces/sqa/enter',json={},headers=owner_headers).status_code==403
+    with connect() as conn,conn.cursor() as cur:
+        cur.execute("UPDATE owner_session_proofs SET expires_at=now()+interval '15 minutes' WHERE user_id=%s",(owner_id,))
+        cur.execute("UPDATE platform_owner_grants SET revoked_at=now() WHERE user_id=%s",(owner_id,))
+    assert not owner.get('/api/workspace').get_json()['state']['records']
     for secret in [password,key,recovery,*[a[2] for a in accounts]]:assert secret not in captured.getvalue()
 print('PASS: five activations, password policy, encrypted MFA, pending-session isolation, CSRF, replay/rate limits, generic recovery, owner-only issuance, MFA reset, token reuse rejection, session revocation, clean initial content and identified read/edit logs without content')

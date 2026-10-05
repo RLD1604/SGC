@@ -254,6 +254,8 @@ class AuthService:
             memberships, grants = self._load_access(cur, user_id)
         g.auth_session = {"id": str(session_id), "csrf_hash": bytes(csrf_hash)}
         g.principal = self._principal(user_id, session_id, display_name, memberships, grants)
+        owner_context=self.app.config.get('AUTH_OWNER_CONTEXT')
+        if owner_context:g.principal=owner_context(g.principal)
         checker=self.app.config.get('AUTH_MFA_CHECK')
         if checker and not checker(g.principal):
             g.pending_principal=g.principal

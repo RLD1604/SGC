@@ -130,6 +130,10 @@ def register_editorial(app, connect, current_principal, require_session, require
     @require_session
     def workspace_filtered():
         actor = principal()
+        if actor.get('platformOwner') and not actor.get('ownerVerified'):
+            return jsonify(error='Confirme o acesso no painel do dono.'),403
+        if actor.get('ownerVerified') and request.headers.get('X-SGC-Owner-Space') and request.headers['X-SGC-Owner-Space'] not in actor.get('memberships',[]):
+            return jsonify(error='O espaço foi trocado em outra aba. Reabra pelo painel do dono.'),409
         output = {"records": [], "editions": [], "publications": []}
         g.delivered_resources=[]
         with connect() as conn, conn.cursor() as cur:
