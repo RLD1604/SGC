@@ -26,4 +26,6 @@ Não foi alterada a senha ou a chave real de rodrigo; configuração pessoal do 
 
 ## Cópia externa
 
-Backup final da versão com QR em verificação/envio. Recibo será acrescentado após confirmação.
+Código publicado na main: `99c40a1`. Backup final `20261005T191731Z-38dbb576` contém a imagem indicada acima. Serviço direto VPS→Drive terminou com sucesso; recibo registra status success, mesmo runId e quatro arquivos, verifiedAtUtc=2026-10-05T19:18:28Z. Dump restaurado em banco isolado e hash do pacote verificado antes da aceitação; pacote remoto conferido pelo serviço antes de gravar o recibo. A configuração pessoal do autenticador continua sendo ação do dono.
+
+Listagem independente confirmou exatamente SUCCESS, manifest.json, sgc-recovery.tar.age e sgc-recovery.tar.age.sha256. Hash final do pacote: `71214952725b8e8876d1c45742f304eb1827156beb57ad30be591750fbd00ca1`. Indicador do painel atualizado após confirmação.
