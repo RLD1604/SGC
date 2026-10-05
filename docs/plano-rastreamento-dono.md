@@ -19,4 +19,4 @@
 - Retenção somente na tabela de diagnóstico, nunca nas decisões/aprovações imutáveis.
 - Limite de três ciclos por erro; parar se o terceiro não aprovar. Registrar erros do harness separadamente dos erros do app.
 
-Estado: etapas 0 a 4 implementadas e verificadas; etapa 5 com Desktop/VPS verificados, publicação e cópia externa em finalização. Evidências em auditoria-rastreamento-dono.md. A configuração pessoal do autenticador pelo dono permanece necessária.
+Estado: etapas 0 a 5 implementadas, revisadas e verificadas; Desktop/VPS com a mesma imagem, código publicado no GitHub e backup cifrado confirmado no Drive. Evidências em auditoria-rastreamento-dono.md. A configuração pessoal do autenticador pelo dono permanece necessária; não foi declarada concluída.

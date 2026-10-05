@@ -9,7 +9,7 @@ Versão 0.2.6-beta.1, schema 9. Plano: plano-rastreamento-dono.md.
 | 2 | Relatos do navegador | Navegação, tentativas e falhas sem valores dos campos; sessão, CSRF, limite de tamanho e volume, código de atendimento |
 | 3 | Dono separado dos clientes | Grant exclusivo de rodrigo; senha e TOTP, bloqueio de reutilização, limite de tentativas e autorização por sessão de 15 minutos |
 | 4 | Painel somente de leitura | Indicadores e filtros paginados; nomes de usuários/condomínios; bloqueio, expiração e proteção contra cache/embutimento |
-| 5 | Testar, comparar e distribuir | Testes concluídos; Desktop e VPS saudáveis com imagem idêntica; GitHub e Drive registrados abaixo após conclusão |
+| 5 | Testar, comparar e distribuir | Testes concluídos; Desktop e VPS saudáveis com imagem e hashes de arquivos idênticos; GitHub e Drive confirmados abaixo |
 
 ## Evidências
 
@@ -48,4 +48,9 @@ Este painel não inclui edição global de conteúdo nem administração global 
 
 ## Publicação e cópia externa
 
-Em finalização. Não considerar envio ao Drive aprovado apenas pelo início do serviço; exige status success, mesmo runId e quatro arquivos verificados.
+- Código publicado na branch main de RLD1604/SGC: commit `1fe9cfc53f0c7ee5b32fd99164a2aa708d5592cb`; ls-remote confirmou a publicação. Atualização posterior deste recibo altera somente documentação.
+- Backup final: `20261005T184950Z-b2d996f2`, imagem igual à implantada; SUCCESS e SHA-256 válidos. O serviço de backup restaurou o dump em PostgreSQL isolado antes de aceitar o pacote.
+- Serviço de envio direto VPS→Drive terminou com Result=success, ExecMainStatus=0. Recibo last-success.json: status success, mesmo runId, files=4, verifiedAtUtc=2026-10-05T18:56:54Z. O serviço verifica os quatro arquivos e o pacote remoto antes de gravar esse recibo.
+- Listagem remota final confirmou exatamente SUCCESS, manifest.json, sgc-recovery.tar.age e sgc-recovery.tar.age.sha256. SHA-256 do pacote: `f4761ecdf4d8c921eb2a9fb6c044f131004d40a3971d848252f1088866fd7e9d`.
+- Indicador sanitizado do painel atualizado após essa confirmação; serviço terminou com sucesso.
+- Contêiner de navegador QA desta entrega parado, sem remover os demais serviços ou as evidências.
