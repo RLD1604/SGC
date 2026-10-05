@@ -1,0 +1,9 @@
+[Unit]
+Description=Retencao de 90 dias apenas no diagnostico tecnico SGC
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/sgc-diagnostics-retention
+User=root
+NoNewPrivileges=true
+ProtectSystem=strict
+PrivateTmp=true

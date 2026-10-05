@@ -11,5 +11,8 @@
 !authorization.py
 !editorial_api.py
 !manage_accounts.py
+!observability.py
+!owner_console.py
+!bootstrap_owner.py
 public/vendor/jodit.min.js
 public/vendor/jodit.min.css

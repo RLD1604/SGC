@@ -166,7 +166,7 @@ class AuthService:
         try:
             self.audit_callback(action, **fields)
         except Exception:
-            self.app.logger.exception("Authentication audit callback failed")
+            self.app.logger.error("Authentication audit callback failed")
 
     def _cookie_options(self, *, httponly: bool) -> dict[str, Any]:
         return {
@@ -319,6 +319,7 @@ class AuthService:
             session_id, session_token, csrf_token = self._new_session(cur, user_id, generation)
             memberships, grants = self._load_access(cur, user_id)
         principal = self._principal(user_id, session_id, display_name, memberships, grants)
+        g.principal = principal  # Successful login diagnostics identify the user.
         response = jsonify(principal=principal, csrf_token=csrf_token)
         self._set_cookies(response, session_token, csrf_token)
         self._audit("auth.login", actor_user_id=str(user_id), outcome="success")

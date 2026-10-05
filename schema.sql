@@ -252,6 +252,27 @@ CREATE OR REPLACE FUNCTION reject_immutable_change() RETURNS trigger LANGUAGE pl
 BEGIN
   RAISE EXCEPTION 'immutable operational record';
 END $$;
+
+-- Schema 8: diagnostic retention is separate from immutable business audit.
+CREATE TABLE IF NOT EXISTS diagnostic_events (
+ id uuid PRIMARY KEY, occurred_at timestamptz NOT NULL DEFAULT now(),
+ actor_user_id uuid REFERENCES users(id), condominium_id text REFERENCES condominiums(id),
+ request_id uuid NOT NULL, source text NOT NULL CHECK(source IN ('server','browser')),
+ action text NOT NULL, result text NOT NULL CHECK(result IN ('success','denied','error','reported')),
+ http_status integer, duration_ms integer, metadata jsonb NOT NULL DEFAULT '{}'
+);
+CREATE INDEX IF NOT EXISTS diagnostic_events_time ON diagnostic_events(occurred_at DESC,id DESC);
+CREATE INDEX IF NOT EXISTS diagnostic_events_request ON diagnostic_events(request_id);
+CREATE INDEX IF NOT EXISTS diagnostic_events_actor ON diagnostic_events(actor_user_id,occurred_at DESC);
+CREATE TABLE IF NOT EXISTS diagnostic_quotas(user_id uuid PRIMARY KEY REFERENCES users(id),window_start timestamptz NOT NULL,hits integer NOT NULL);
+CREATE TABLE IF NOT EXISTS diagnostic_retention_runs(day date PRIMARY KEY);
+INSERT INTO schema_versions(version) VALUES(8) ON CONFLICT DO NOTHING;
+
+-- Schema 9: global owner authorization cannot be granted through tenant roles.
+CREATE TABLE IF NOT EXISTS platform_owner_grants(user_id uuid PRIMARY KEY REFERENCES users(id),starts_at timestamptz NOT NULL DEFAULT now(),revoked_at timestamptz,singleton boolean NOT NULL DEFAULT true UNIQUE CHECK(singleton));
+CREATE TABLE IF NOT EXISTS owner_access_state(user_id uuid PRIMARY KEY REFERENCES users(id),secret_fingerprint text NOT NULL,enrolled_at timestamptz,last_counter bigint NOT NULL DEFAULT -1,attempts integer NOT NULL DEFAULT 0,attempt_window timestamptz NOT NULL DEFAULT now());
+CREATE TABLE IF NOT EXISTS owner_session_proofs(session_id uuid PRIMARY KEY REFERENCES sessions(id),user_id uuid NOT NULL REFERENCES users(id),secret_fingerprint text NOT NULL,expires_at timestamptz NOT NULL);
+INSERT INTO schema_versions(version) VALUES(9) ON CONFLICT DO NOTHING;
 DROP TRIGGER IF EXISTS record_revisions_immutable ON record_revisions;
 CREATE TRIGGER record_revisions_immutable BEFORE UPDATE OR DELETE ON record_revisions FOR EACH ROW EXECUTE FUNCTION reject_immutable_change();
 DROP TRIGGER IF EXISTS approval_decisions_immutable ON approval_decisions;

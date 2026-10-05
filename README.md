@@ -2,7 +2,7 @@
 
 Aplicação editorial com API Flask e **PostgreSQL 17**, independente do sistema antigo. Acesso: http://localhost:9001.
 
-**0.2.1-beta.1 — Beta local.** Editor TinyMCE unificado; autenticação e aprovação por usuário ainda em planejamento. Veja [o plano da Beta](../docs/beta-autenticacao-e-aprovacao.md) e a página `/beta.html` no sistema. Notas soltas usam o mesmo acervo de registros, com categoria própria.
+**0.2.6-beta.1 — Beta com autenticação, aprovação, dois perfis de condomínio e rastreamento operacional.** Veja a [auditoria da entrega](docs/auditoria-rastreamento-dono.md) e o [manual do dono](docs/manual-dono.md). Painel exclusivo: `/owner.html`; requer senha e autenticador pessoal. Documentos das versões anteriores descrevem o histórico do projeto.
 
 Revisão por IA integrada ao editor: botão **Revisar com IA**, comparação de sugestões e aplicação seletiva, sem salvar automaticamente. Usa GPT-OSS 120B na GroqCloud e requer chave da conta Free. Execute `configurar-ia.ps1` para configurar a chave em entrada oculta; o recurso permanece desativado até isso ocorrer. Veja [autorização e IA](../docs/autorizacao-condominio-e-ia.md). Em nova instalação sem IA, crie `.secrets/groq_api_key` vazio antes do Compose.
 

@@ -13,9 +13,14 @@ services:
       DB_PASSWORD_FILE: /run/secrets/db_password
       GROQ_API_KEY_FILE: /run/secrets/groq_api_key
       AI_FREE_TIER_CONFIRMED: ${AI_FREE_TIER_CONFIRMED:-false}
+      OWNER_TOTP_FILE: /run/secrets/owner_totp
+      OWNER_BACKUP_STATUS_FILE: /runtime-status/backup.json
     secrets:
       - db_password
       - groq_api_key
+      - owner_totp
+    volumes:
+      - ./.runtime-status:/runtime-status:ro
     depends_on:
       database:
         condition: service_healthy
@@ -50,3 +55,5 @@ secrets:
     file: ./.secrets/postgres_password
   groq_api_key:
     file: ./.secrets/groq_api_key
+  owner_totp:
+    file: ./.secrets/owner_totp

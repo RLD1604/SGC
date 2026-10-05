@@ -9,9 +9,11 @@ async function authRequest(path,options={}){
  const headers={...(options.headers||{})};
  if(options.body&&!headers['Content-Type'])headers['Content-Type']='application/json';
  if(options.method&&options.method!=='GET'&&csrfToken)headers['X-CSRF-Token']=csrfToken;
- const response=await fetch(path,{...options,headers,credentials:'same-origin',cache:'no-store'});
+ let response;
+ try{response=await fetch(path,{...options,headers,credentials:'same-origin',cache:'no-store'});}
+ catch(cause){const code='LOCAL-'+crypto.randomUUID();window.SgcDiagnostics?.report('network_error',code);const error=new Error('Não foi possível confirmar a operação. Código de atendimento: '+code);error.requestId=code;throw error;}
  const result=await response.json().catch(()=>({error:'O servidor não respondeu.'}));
- if(!response.ok){const error=new Error(result.error||'Não foi possível concluir.');error.status=response.status;throw error;}
+ if(!response.ok){const code=response.headers.get('X-Request-ID');const error=new Error((result.error||'Não foi possível concluir.')+(code?' Código de atendimento: '+code:''));error.status=response.status;error.requestId=code;throw error;}
  return result;
 }
 

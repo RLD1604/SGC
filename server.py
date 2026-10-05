@@ -15,12 +15,14 @@ from urllib.parse import urlsplit
 import psycopg2
 from psycopg2.extras import Json, register_uuid
 from PIL import Image, ImageOps, UnidentifiedImageError
-from flask import Flask, jsonify, request, send_from_directory, Response
+from flask import Flask, jsonify, request, send_from_directory, Response, g
 from rich_text import sanitize_documents
 from ai_review import register_ai
 from auth import register_auth, current_principal, require_session
 from authorization import Grant, Principal, Resource, authorize_decision
 from editorial_api import register_editorial
+from observability import register_observability
+from owner_console import register_owner
 
 ROOT = Path(__file__).parent
 register_uuid()
@@ -60,20 +62,33 @@ def audit_event(cur, actor, action, entity_type, entity_id, result, *, revision_
     actor_user = actor.get('user_id') if isinstance(actor, dict) else None
     session_id = actor.get('session_id') if isinstance(actor, dict) else None
     condominium_id = (metadata or {}).get('condominium_id') or ((actor.get('memberships') or [None])[0] if isinstance(actor, dict) else None)
+    scope_tables={'record':('record_metadata','record_id'),'edition':('edition_metadata','edition_id'),'publication':('official_publications','id')}
+    if entity_type in scope_tables:
+        scope_table,scope_column=scope_tables[entity_type]
+        cur.execute('SELECT condominium_id FROM '+scope_table+' WHERE '+scope_column+'=%s',(entity_id,))
+        scope=cur.fetchone()
+        if scope:condominium_id=scope[0]
+    g.business_action=action
+    g.business_condominium_id=condominium_id
     cur.execute(
         'INSERT INTO audit_events(id,condominium_id,actor_user_id,session_id,action,entity_type,entity_id,revision_id,result,correlation_id,metadata) VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)',
         (uuid.uuid4(), condominium_id, actor_user, session_id, action, entity_type, entity_id,
-         revision_id, result, request.headers.get('X-Correlation-ID') or str(uuid.uuid4()), Json(metadata or {})))
+         revision_id, result, getattr(g,'request_id',str(uuid.uuid4())), Json(metadata or {})))
 
 
 def auth_audit(action, *, actor_user_id=None, subject_user_id=None, outcome='success', details=None):
     """Authentication failures need their own short transaction."""
     result = outcome if outcome in ('success', 'denied', 'error') else ('denied' if outcome in ('rejected',) else 'success')
+    g.diagnostic_user_id=actor_user_id or subject_user_id
     with connect() as conn, conn.cursor() as cur:
+        if g.diagnostic_user_id:
+            cur.execute("SELECT condominium_id FROM memberships WHERE user_id=%s AND status='active' ORDER BY condominium_id LIMIT 1",(g.diagnostic_user_id,))
+            scope=cur.fetchone()
+            if scope:g.business_condominium_id=scope[0]
         cur.execute(
             'INSERT INTO audit_events(id,actor_user_id,subject_user_id,action,result,correlation_id,metadata) VALUES(%s,%s,%s,%s,%s,%s,%s)',
             (uuid.uuid4(), actor_user_id, subject_user_id, action, result,
-             request.headers.get('X-Correlation-ID') or str(uuid.uuid4()), Json(details or {})))
+             getattr(g,'request_id',str(uuid.uuid4())), Json(details or {})))
 
 
 def _authorization_principal(actor, condominium_id, cur):
@@ -498,7 +513,7 @@ def invalid(error):
 
 @app.errorhandler(psycopg2.Error)
 def database_error(error):
-    app.logger.exception('Database operation failed')
+    app.logger.error('Database operation failed; request_id=%s; type=%s',getattr(g,'request_id','unknown'),type(error).__name__)
     return jsonify(error='O banco está indisponível. Seu trabalho não foi confirmado; tente salvar novamente.'),503
 
 
@@ -616,24 +631,30 @@ def _html_file(filename):
         # base-path fetch adapter.
         content = re.sub(r'((?:src|href)="?)/(?!/)', lambda match: match.group(1) + APP_BASE_PATH + '/', content)
         content = content.replace('<head>', f'<head><base href="{APP_BASE_PATH}/"><meta name="sqa-base-path" content="{APP_BASE_PATH}">', 1)
-    return Response(content, mimetype='text/html', headers={'Cache-Control': 'no-cache'})
+    headers={'Cache-Control':'no-cache'}
+    if filename=='owner.html':
+        headers.update({'Cache-Control':'no-store','Content-Security-Policy':"default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'",'X-Frame-Options':'DENY','Referrer-Policy':'no-referrer'})
+    return Response(content, mimetype='text/html', headers=headers)
 
 
 @app.get('/<path:filename>')
 def static_file(filename):
-    if filename in {'beta.html', 'ia.html'}:
+    if filename in {'beta.html', 'ia.html', 'owner.html'}:
         return _html_file(filename)
     return send_from_directory(ROOT / 'public',filename,max_age=0)
 
 
 app.config['AUTH_COOKIE_SECURE'] = os.getenv('AUTH_COOKIE_SECURE', 'false').lower() == 'true'
+client_report = register_observability(app, connect)
 auth_service = register_auth(app, connect, auth_audit)
+app.add_url_rule('/api/diagnostics/client','client_diagnostics',auth_service.require_csrf(client_report),methods=['POST'])
 app.config['AUTH_CAN_MANAGE_ACCOUNTS'] = lambda actor, condominium_id=None: authorize_request(
     actor, 'accounts.manage', {'condominium_id': condominium_id} if condominium_id else None
 )
 register_editorial(app, connect, current_principal, require_session, auth_service.require_csrf,
                    authorize_request, validate, normalize, read_state, audit_event)
 register_ai(app,connect,current_principal,require_session,auth_service.require_csrf,authorize_request)
+register_owner(app,connect,require_session,auth_service.require_csrf)
 
 
 class BasePathMiddleware:

@@ -1,0 +1,10 @@
+[Unit]
+Description=Exporta metadados sanitizados de backup para o painel SGC
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 /usr/local/sbin/sgc-owner-status
+User=root
+NoNewPrivileges=true
+ProtectSystem=strict
+ReadWritePaths=/opt/sgc-codex-20260925/runtime-status
+PrivateTmp=true
