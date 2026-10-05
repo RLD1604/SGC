@@ -441,10 +441,19 @@ def _record_transition(record_id, target_state, permission, action, connect, act
         cur.execute("SELECT r.document,m.condominium_id,m.author_user_id,m.current_revision FROM records r JOIN record_metadata m ON m.record_id=r.id WHERE r.id=%s FOR UPDATE", (record_id,))
         row = cur.fetchone()
         target = {"condominium_id": row[1], "author_user_id": str(row[2]) if row[2] else None, "revision": row[3], "state": row[0].get("status"), "document_id": record_id} if row else None
-        if not row or not can(actor, permission, target, cur=cur):
+        if not row:
             return jsonify(error="Documento não encontrado."), 404
         if not isinstance(expected_revision, int) or expected_revision != row[3]:
+            # A concurrent winner may already have moved the workflow to a
+            # state where this transition permission no longer applies.  Keep
+            # cross-condominium and out-of-scope documents concealed, but tell
+            # an actor who can still read this record to reload instead of
+            # incorrectly claiming that the document disappeared.
+            if not can(actor, "item.read", target, cur=cur):
+                return jsonify(error="Documento não encontrado."), 404
             return jsonify(error="Outra sessão alterou este registro. Recarregue antes de continuar."), 409
+        if not can(actor, permission, target, cur=cur):
+            return jsonify(error="Documento não encontrado."), 404
         allowed = {("draft", "review"), ("fix", "review"), ("review", "ready"), ("review", "fix")}
         if (row[0].get("status"), target_state) not in allowed:
             return jsonify(error="Transição editorial inválida."), 409

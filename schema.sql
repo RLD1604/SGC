@@ -260,3 +260,11 @@ DROP TRIGGER IF EXISTS official_publications_immutable ON official_publications;
 CREATE TRIGGER official_publications_immutable BEFORE UPDATE OR DELETE ON official_publications FOR EACH ROW EXECUTE FUNCTION reject_immutable_change();
 
 INSERT INTO schema_versions(version) VALUES (5) ON CONFLICT DO NOTHING;
+
+-- Schema 6: the operational audit trail is append-only at the database layer.
+-- Application sessions may insert events, but existing evidence cannot be
+-- rewritten or removed through the same database credential.
+DROP TRIGGER IF EXISTS audit_events_immutable ON audit_events;
+CREATE TRIGGER audit_events_immutable BEFORE UPDATE OR DELETE ON audit_events FOR EACH ROW EXECUTE FUNCTION reject_immutable_change();
+
+INSERT INTO schema_versions(version) VALUES (6) ON CONFLICT DO NOTHING;
