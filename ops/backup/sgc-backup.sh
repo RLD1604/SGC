@@ -94,7 +94,8 @@ cat >"$stage/RESTORE.txt" <<'EOF'
 2. Carregue a imagem com: docker image load -i application-image.tar
 3. Restaure database.dump em um PostgreSQL vazio com pg_restore --exit-on-error.
 4. Recrie redes, volume e contêiner usando configuração operacional custodiada separadamente.
-5. Injete senhas/chaves a partir do cofre; elas não fazem parte deste pacote.
+5. Injete senhas de banco/IA a partir do cofre. Se existir credentials/, restaure
+   owner_totp e user_mfa_key em arquivos privados e montagens somente leitura.
 6. Valide saúde, contagens, login e mídia antes de publicar tráfego.
 EOF
 
@@ -104,8 +105,18 @@ cat >"$stage/manifest.json" <<EOF
 {"format_version":1,"run_id":"$run_id","created_utc":"$(date -u +%FT%TZ)","database":{"name":"$DB_NAME","sha256":"$dump_sha","restore_tested":true,"restored_public_tables":$table_count},"application":{"image_ref":"$image_ref","image_id":"$image_id","archive_sha256":"$image_sha","runtime_metadata_sanitized":true},"encryption":"age","retention_mode":"report-only"}
 EOF
 
-tar --format=posix -C "$stage" -cf "$stage/sgc-recovery.tar" \
-  database.dump application-image.tar application-runtime-sanitized.json RESTORE.txt manifest.json
+archive_files=(database.dump application-image.tar application-runtime-sanitized.json RESTORE.txt manifest.json)
+# MFA keys are recovery-critical. Include them ONLY inside the age-encrypted
+# package, never in the external manifest, image, logs or Git.
+secret_root=${MFA_SECRET_ROOT:-/opt/sgc-codex-20260925/runtime-secrets}
+if [[ -r "$secret_root/user-mfa-app" ]]; then
+  [[ -r "$secret_root/owner-app" ]] || { echo 'Chave MFA do dono ausente; backup abortado' >&2; exit 7; }
+  install -d -m 0700 "$stage/credentials"
+  install -m 0600 "$secret_root/user-mfa-app" "$stage/credentials/user_mfa_key"
+  install -m 0600 "$secret_root/owner-app" "$stage/credentials/owner_totp"
+  archive_files+=(credentials)
+fi
+tar --format=posix -C "$stage" -cf "$stage/sgc-recovery.tar" "${archive_files[@]}"
 age -r "$AGE_RECIPIENT" -o "$stage/sgc-recovery.tar.age" "$stage/sgc-recovery.tar"
 (
   cd "$stage"

@@ -3,7 +3,11 @@
 Esta rotina cria diariamente um pacote cifrado com dump consistente do PostgreSQL,
 imagem Docker do aplicativo, manifesto, hashes e metadados mínimos de reconstrução.
 Antes de aceitar o backup, restaura o dump em um PostgreSQL efêmero com rede `none`.
-O pacote não inclui variáveis de ambiente do contêiner, chaves ou senhas.
+O pacote não inclui variáveis de ambiente do contêiner, senha do banco ou chave da IA.
+Na versão com MFA individual, inclui as duas chaves de recuperação MFA somente
+dentro do pacote cifrado age: credentials/user_mfa_key e credentials/owner_totp.
+Não ficam no manifesto externo, imagem ou Git. Guarde a identidade privada age
+fora do VPS; sem ela não é possível abrir o pacote.
 
 ## Pré-requisitos
 

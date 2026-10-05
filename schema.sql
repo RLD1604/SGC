@@ -272,6 +272,15 @@ INSERT INTO schema_versions(version) VALUES(8) ON CONFLICT DO NOTHING;
 CREATE TABLE IF NOT EXISTS platform_owner_grants(user_id uuid PRIMARY KEY REFERENCES users(id),starts_at timestamptz NOT NULL DEFAULT now(),revoked_at timestamptz,singleton boolean NOT NULL DEFAULT true UNIQUE CHECK(singleton));
 CREATE TABLE IF NOT EXISTS owner_access_state(user_id uuid PRIMARY KEY REFERENCES users(id),secret_fingerprint text NOT NULL,enrolled_at timestamptz,last_counter bigint NOT NULL DEFAULT -1,attempts integer NOT NULL DEFAULT 0,attempt_window timestamptz NOT NULL DEFAULT now());
 CREATE TABLE IF NOT EXISTS owner_session_proofs(session_id uuid PRIMARY KEY REFERENCES sessions(id),user_id uuid NOT NULL REFERENCES users(id),secret_fingerprint text NOT NULL,expires_at timestamptz NOT NULL);
+-- Schema 10: individual MFA and owner-assisted recovery, no public token delivery.
+ALTER TABLE users ADD COLUMN IF NOT EXISTS mfa_required boolean NOT NULL DEFAULT false;
+ALTER TABLE sessions ADD COLUMN IF NOT EXISTS mfa_verified boolean NOT NULL DEFAULT false;
+ALTER TABLE recovery_tokens ADD COLUMN IF NOT EXISTS reset_mfa boolean NOT NULL DEFAULT false;
+CREATE TABLE IF NOT EXISTS user_mfa(user_id uuid PRIMARY KEY REFERENCES users(id),secret_ciphertext bytea NOT NULL,enrolled_at timestamptz,last_counter bigint NOT NULL DEFAULT -1,attempts integer NOT NULL DEFAULT 0,attempt_window timestamptz NOT NULL DEFAULT now());
+CREATE TABLE IF NOT EXISTS access_recovery_requests(id uuid PRIMARY KEY,user_id uuid NOT NULL REFERENCES users(id),kind text NOT NULL CHECK(kind IN ('password','authenticator','activation')),status text NOT NULL DEFAULT 'pending' CHECK(status IN ('pending','issued','rejected')),created_at timestamptz NOT NULL DEFAULT now(),resolved_at timestamptz,resolved_by uuid REFERENCES users(id));
+CREATE UNIQUE INDEX IF NOT EXISTS access_recovery_pending ON access_recovery_requests(user_id) WHERE status='pending';
+CREATE TABLE IF NOT EXISTS public_recovery_quotas(key bytea PRIMARY KEY,window_started_at timestamptz NOT NULL,hits integer NOT NULL);
+INSERT INTO schema_versions(version) VALUES(10) ON CONFLICT DO NOTHING;
 INSERT INTO schema_versions(version) VALUES(9) ON CONFLICT DO NOTHING;
 DROP TRIGGER IF EXISTS record_revisions_immutable ON record_revisions;
 CREATE TRIGGER record_revisions_immutable BEFORE UPDATE OR DELETE ON record_revisions FOR EACH ROW EXECUTE FUNCTION reject_immutable_change();

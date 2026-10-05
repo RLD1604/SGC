@@ -2,6 +2,7 @@
 import json
 import time
 import uuid
+import re
 from datetime import datetime, timezone
 from flask import g, request, jsonify
 from psycopg2.extras import Json
@@ -48,6 +49,12 @@ def register_observability(app, connect):
                 'condominiumId':getattr(g,'business_condominium_id',None) or (actor.get('memberships') or [None])[0],
                 'httpStatus':status,'durationMs':round((time.monotonic()-getattr(g,'request_started',time.monotonic()))*1000),
                 'metadata':{'method':request.method,'route':request.url_rule.rule if request.url_rule else 'unknown'}}
+            resources={key:str(value) for key,value in (request.view_args or {}).items() if key in ('record_id','edition_id','document_id','document_type','publication_id','revision_id','media_id') and re.fullmatch(r'[\w-]{1,100}',str(value))}
+            if resources:event['metadata']['resource']=resources
+            changed=getattr(g,'diagnostic_changed_fields',None)
+            if changed is not None:event['metadata']['changedFields']=changed
+            delivered=getattr(g,'delivered_resources',None)
+            if delivered is not None:event['metadata']['deliveredResources']=delivered[:100]
             if request.endpoint=='client_diagnostics':
                 emit(event)  # Quota denials must not amplify database volume.
             else:
@@ -58,7 +65,7 @@ def register_observability(app, connect):
         actor=getattr(g,'principal',None) or {}
         request.max_content_length=2048
         body=request.get_json(silent=True)
-        allowed={'script_error','promise_error','network_error','validation_blocked','navigation','action_attempt'}
+        allowed={'script_error','promise_error','network_error','validation_blocked','navigation','action_attempt','document_view'}
         pages={'inicio','registros','novo','nota','registro','revisao','informes','selecionar','editor','previa','publicado','lixeira','owner','unknown'}
         if not isinstance(body,dict) or not isinstance(body.get('kind'),str) or not isinstance(body.get('page'),str) or body.get('kind') not in allowed or body.get('page') not in pages:
             return jsonify(error='Relato inválido.'),400
@@ -69,6 +76,11 @@ def register_observability(app, connect):
         if hits>30:
             return jsonify(error='Limite de relatos atingido.'),429
         metadata={'page':body['page'],'untrustedClientReport':True}
+        if body['kind']=='document_view':
+            checker=app.config.get('AUTH_DIAGNOSTIC_RESOURCE')
+            resource=checker(actor,body.get('resourceType'),body.get('resourceId')) if checker else None
+            if not resource:return jsonify(error='Documento não encontrado.'),404
+            metadata['resource']=resource
         # Only validated UUIDs can refer to a preceding server response.
         try: metadata['relatedRequestId']=str(uuid.UUID(body.get('relatedRequestId','')))
         except (ValueError,TypeError,AttributeError): pass

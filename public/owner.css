@@ -2,3 +2,5 @@
 #event-filters>button{align-self:end}#event-filters>div{display:contents}
 
 #setup-qr{display:block;width:320px;max-width:100%;height:auto;margin:16px 0}#setup-area details{margin:12px 0}#setup-area summary{cursor:pointer}
+
+.auth-qr{display:block;width:320px;max-width:100%;height:auto;margin:16px 0}.recovery-item{padding:16px;border-bottom:1px solid #ddd}.recovery-item label:has(input[type=checkbox]){display:flex;gap:8px}.recovery-item input[type=checkbox]{width:auto}

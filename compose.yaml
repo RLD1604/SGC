@@ -14,11 +14,13 @@ services:
       GROQ_API_KEY_FILE: /run/secrets/groq_api_key
       AI_FREE_TIER_CONFIRMED: ${AI_FREE_TIER_CONFIRMED:-false}
       OWNER_TOTP_FILE: /run/secrets/owner_totp
+      USER_MFA_KEY_FILE: /run/secrets/user_mfa_key
       OWNER_BACKUP_STATUS_FILE: /runtime-status/backup.json
     secrets:
       - db_password
       - groq_api_key
       - owner_totp
+      - user_mfa_key
     volumes:
       - ./.runtime-status:/runtime-status:ro
     depends_on:
@@ -57,3 +59,5 @@ secrets:
     file: ./.secrets/groq_api_key
   owner_totp:
     file: ./.secrets/owner_totp
+  user_mfa_key:
+    file: ./.secrets/user_mfa_key

@@ -223,6 +223,7 @@ class AuthService:
 
     def load_request_principal(self) -> None:
         g.principal = None
+        g.pending_principal = None
         g.auth_session = None
         raw = request.cookies.get(self.app.config.get("AUTH_COOKIE_NAME", COOKIE_NAME), "")
         if not raw:
@@ -253,6 +254,11 @@ class AuthService:
             memberships, grants = self._load_access(cur, user_id)
         g.auth_session = {"id": str(session_id), "csrf_hash": bytes(csrf_hash)}
         g.principal = self._principal(user_id, session_id, display_name, memberships, grants)
+        checker=self.app.config.get('AUTH_MFA_CHECK')
+        if checker and not checker(g.principal):
+            g.pending_principal=g.principal
+            g.diagnostic_user_id=g.principal['user_id']
+            g.principal=None
 
     def require_csrf(self, view):
         @wraps(view)
@@ -320,13 +326,22 @@ class AuthService:
             memberships, grants = self._load_access(cur, user_id)
         principal = self._principal(user_id, session_id, display_name, memberships, grants)
         g.principal = principal  # Successful login diagnostics identify the user.
-        response = jsonify(principal=principal, csrf_token=csrf_token)
+        checker=self.app.config.get('AUTH_MFA_CHECK')
+        pending=bool(checker and not checker(principal))
+        if pending:
+            g.pending_principal=principal
+            g.principal=None
+            g.diagnostic_user_id=str(user_id)
+        response = jsonify(principal=principal, csrf_token=csrf_token, mfaRequired=pending)
         self._set_cookies(response, session_token, csrf_token)
         self._audit("auth.login", actor_user_id=str(user_id), outcome="success")
         return response
 
     def session_info(self):
         principal = current_principal()
+        pending=getattr(g,'pending_principal',None)
+        if pending:
+            return jsonify(principal=pending,mfaRequired=True,csrf_token=request.cookies.get(self.app.config.get('AUTH_CSRF_COOKIE_NAME',CSRF_COOKIE_NAME),''))
         if principal is None:
             response = jsonify(error="Entre novamente para continuar.")
             self._clear_cookies(response)
@@ -402,6 +417,7 @@ class AuthService:
             if not row:
                 return jsonify(error="A conta não pode receber um novo convite."), 409
             user_id = row[0]
+            cur.execute('UPDATE users SET mfa_required=true WHERE id=%s',(user_id,))
             cur.execute("SELECT id FROM memberships WHERE user_id=%s AND condominium_id=%s", (user_id, condominium_id))
             membership = cur.fetchone()
             if membership:
@@ -458,6 +474,8 @@ class AuthService:
         return jsonify(status="ok")
 
     def request_recovery(self):
+        handler=self.app.config.get('AUTH_ASSISTED_REQUEST')
+        if handler:return handler()
         body = request.get_json(silent=True) or {}
         try:
             login = normalize_login(body.get("login"))
@@ -517,6 +535,9 @@ class AuthService:
             cur.execute("UPDATE recovery_tokens SET used_at=now() WHERE id=%s", (recovery_id,))
             cur.execute("UPDATE recovery_tokens SET revoked_at=now() WHERE user_id=%s AND id<>%s AND used_at IS NULL AND revoked_at IS NULL", (user_id, recovery_id))
             cur.execute("UPDATE sessions SET revoked_at=now(),revoke_reason='password_recovery' WHERE user_id=%s AND revoked_at IS NULL", (user_id,))
+            cur.execute('SELECT reset_mfa FROM recovery_tokens WHERE id=%s',(recovery_id,))
+            if cur.fetchone()[0]:
+                cur.execute('DELETE FROM user_mfa WHERE user_id=%s',(user_id,))
         self._audit("auth.recovery_complete", subject_user_id=str(user_id), outcome="success")
         response = jsonify(status="ok")
         self._clear_cookies(response)

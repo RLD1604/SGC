@@ -16,7 +16,7 @@ import unicodedata
 import uuid
 from datetime import datetime, timezone
 
-from flask import Response, jsonify, request
+from flask import Response, jsonify, request, g
 from psycopg2.extras import Json
 
 RENDERER_VERSION = "sqa-server-html-1"
@@ -131,11 +131,13 @@ def register_editorial(app, connect, current_principal, require_session, require
     def workspace_filtered():
         actor = principal()
         output = {"records": [], "editions": [], "publications": []}
+        g.delivered_resources=[]
         with connect() as conn, conn.cursor() as cur:
             cur.execute("SELECT r.document,m.condominium_id,m.author_user_id,m.current_revision,r.id FROM records r JOIN record_metadata m ON m.record_id=r.id ORDER BY r.updated_at,r.id")
             for document, condominium_id, author_id, revision, _ in cur.fetchall():
                 if can(actor, "item.read", resource((condominium_id, author_id, revision), document), cur=cur):
                     output["records"].append(_contextualize_media(document, "record", document["id"]))
+                    g.delivered_resources.append({"type":"record","id":document["id"]})
             cur.execute("SELECT e.document,m.condominium_id,m.author_user_id,m.current_revision,m.workflow_state,e.id FROM editions e JOIN edition_metadata m ON m.edition_id=e.id ORDER BY e.updated_at,e.id")
             for document, condominium_id, author_id, revision, state, _ in cur.fetchall():
                 if can(actor, "edition.read", resource((condominium_id, author_id, revision, state), document), cur=cur):
@@ -146,6 +148,7 @@ def register_editorial(app, connect, current_principal, require_session, require
                     latest = cur.fetchone()
                     item["_pendingRevisionId"] = str(latest[0]) if latest and state in ("pending_approval","approved") else None
                     output["editions"].append(item)
+                    g.delivered_resources.append({"type":"edition","id":document["id"]})
             cur.execute("SELECT p.id,e.snapshot,p.published_at,p.condominium_id FROM official_publications p JOIN edition_revisions e ON e.id=p.edition_revision_id WHERE p.condominium_id = ANY(%s) ORDER BY p.published_at", (list(_actor_condominiums(actor)),))
             for publication_id, snapshot, published_at, condominium_id in cur.fetchall():
                 if not can(actor, "publication.read", {"condominium_id": condominium_id}, cur=cur):
@@ -153,6 +156,7 @@ def register_editorial(app, connect, current_principal, require_session, require
                 item = dict(snapshot)
                 item.update(id=str(publication_id), at=published_at.isoformat(), official=True)
                 output["publications"].append(_contextualize_media(item, "official_publication", str(publication_id)))
+                g.delivered_resources.append({'type':'publication','id':str(publication_id)})
         return jsonify(state=output)
 
     @app.post("/api/records")
@@ -206,6 +210,10 @@ def register_editorial(app, connect, current_principal, require_session, require
             document["revision"] = expected + 1
             # Workflow changes use dedicated action endpoints.
             document["status"] = row[0].get("status", "draft")
+            trash_changed=bool(document.get('deletedAt'))!=bool(row[0].get('deletedAt'))
+            if trash_changed and not can(actor,'accounts.manage',{'condominium_id':row[1]},cur=cur):
+                return deny(False)
+            changed_fields=[key for key in ('title','text','category','local','date','who','progress','photos','deletedAt','feedback','feedbackHtml') if document.get(key)!=row[0].get(key)]
             state = read_state(cur)
             state["records"] = [document if item["id"] == record_id else item for item in state["records"]]
             validate_state(state)
@@ -216,7 +224,9 @@ def register_editorial(app, connect, current_principal, require_session, require
             revision_id = uuid.uuid4()
             cur.execute("INSERT INTO record_revisions(id,record_id,revision_number,author_user_id,snapshot,snapshot_hash,workflow_state) VALUES(%s,%s,%s,%s,%s,%s,%s)", (revision_id, record_id, expected + 1, _actor_user(actor), Json(document), digest(document), document["status"]))
             _sync_media_refs(cur, row[1], "record", record_id, document)
-            audit(cur, actor, "record.edit", "record", record_id, "success", revision_id=str(revision_id))
+            action=('record.trash' if document.get('deletedAt') else 'record.restore') if trash_changed else 'record.edit'
+            g.diagnostic_changed_fields=changed_fields
+            audit(cur, actor, action, "record", record_id, "success", revision_id=str(revision_id),metadata={'changedFields':changed_fields})
         return jsonify(document=_contextualize_media(document, "record", record_id))
 
     @app.post("/api/records/<record_id>/submit")

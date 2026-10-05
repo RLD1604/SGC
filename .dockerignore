@@ -14,5 +14,7 @@
 !observability.py
 !owner_console.py
 !bootstrap_owner.py
+!user_security.py
+!prepare_clean_beta.py
 public/vendor/jodit.min.js
 public/vendor/jodit.min.css

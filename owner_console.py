@@ -68,6 +68,8 @@ def register_owner(app,connect,require_session,require_mutation):
             return view(*args,**kw)
         return wrapped
 
+    app.extensions['owner_require']=protected
+
     @app.get('/api/owner/status')
     @require_session
     def owner_status():

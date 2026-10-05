@@ -23,6 +23,7 @@ from authorization import Grant, Principal, Resource, authorize_decision
 from editorial_api import register_editorial
 from observability import register_observability
 from owner_console import register_owner
+from user_security import register_user_security
 
 ROOT = Path(__file__).parent
 register_uuid()
@@ -146,9 +147,6 @@ def initialize():
         cur.execute('SELECT pg_advisory_xact_lock(90012026)')
         cur.execute((ROOT / 'schema.sql').read_text())
         migrate_v4(cur)
-        cur.execute('SELECT revision FROM workspace_state WHERE id=1')
-        if cur.fetchone()[0] == 0:
-            cur.execute("INSERT INTO editions(id,document) VALUES (%s,%s) ON CONFLICT DO NOTHING", ('initial-edition', Json({'id':'initial-edition','title':'SQA Informe','period':'Novo período','status':'draft','blocks':[],'cover':'/images/jardim.jpg','version':1})))
         cur.execute("INSERT INTO edition_metadata(edition_id,condominium_id,current_revision,workflow_state,legacy_import) SELECT id,'sqa',GREATEST(COALESCE((document->>'version')::integer,1),'1'::integer),'draft',true FROM editions ON CONFLICT DO NOTHING")
         cur.execute("INSERT INTO record_metadata(record_id,condominium_id,current_revision,legacy_import) SELECT id,'sqa',GREATEST(COALESCE((document->>'revision')::integer,1),'1'::integer),true FROM records ON CONFLICT DO NOTHING")
         backfill_media_references(cur)
@@ -355,8 +353,6 @@ def validate(data):
                 if not isinstance(row.get('version'), int) or row['version'] < 1: fail(path + '.versão', 'deve ser um número inteiro positivo.')
             if not isinstance(photos, list): fail(path + '.fotos', 'deve ser uma lista.')
             for photo_index, photo in enumerate(photos, 1): validate_photo(photo, f'{path}, foto {photo_index}')
-    if not data['editions']:
-        raise ValueError('Mantenha ao menos um informe em edição.')
 
 
 def store_image(src, cur, mapping, master=False):
@@ -456,6 +452,10 @@ def write_state(cur, data, revision):
 @app.before_request
 def same_origin():
     if request.method in ('POST','PUT','DELETE','PATCH'):
+        if request.path.startswith('/api/auth/'):
+            request.max_content_length=4096
+        if request.is_json and not isinstance(request.get_json(silent=True),dict):
+            return jsonify(error='Envie um objeto JSON válido.'),400
         origin = request.headers.get('Origin')
         if request.headers.get('Sec-Fetch-Site') == 'cross-site' or (origin and urlsplit(origin).netloc != request.host):
             return jsonify(error='Origem da solicitação não permitida.'),403
@@ -655,6 +655,21 @@ register_editorial(app, connect, current_principal, require_session, auth_servic
                    authorize_request, validate, normalize, read_state, audit_event)
 register_ai(app,connect,current_principal,require_session,auth_service.require_csrf,authorize_request)
 register_owner(app,connect,require_session,auth_service.require_csrf)
+register_user_security(app,connect,auth_service)
+
+def diagnostic_resource(actor,kind,document_id):
+    if kind not in ('record','edition','publication') or not isinstance(document_id,str) or not re.fullmatch(r'[\w-]{1,100}',document_id):return None
+    if kind=='publication':
+        try:document_id=str(uuid.UUID(document_id))
+        except ValueError:return None
+    table,key,permission={'record':('record_metadata','record_id','item.read'),'edition':('edition_metadata','edition_id','edition.read'),'publication':('official_publications','id','publication.read')}[kind]
+    with connect() as conn,conn.cursor() as cur:
+        cur.execute('SELECT condominium_id,'+('NULL' if kind=='publication' else 'author_user_id')+' FROM '+table+' WHERE '+key+'=%s',(document_id,))
+        row=cur.fetchone()
+        if not row or not authorize_request(actor,permission,{'condominium_id':row[0],'author_user_id':str(row[1]) if row[1] else None,'document_id':document_id},cur=cur):return None
+    return {'type':kind,'id':document_id}
+app.config['AUTH_DIAGNOSTIC_RESOURCE']=diagnostic_resource
+
 
 
 class BasePathMiddleware:

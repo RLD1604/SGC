@@ -6,3 +6,4 @@ __pycache__/
 .env
 .runtime-status/
 qa/results/
+entregas-privadas/

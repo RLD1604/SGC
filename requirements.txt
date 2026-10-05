@@ -5,3 +5,4 @@ gunicorn==26.2.0
 bleach[css]==6.4.0
 argon2-cffi==25.1.0
 qrcode==8.2
+cryptography==50.0.2

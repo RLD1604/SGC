@@ -15,3 +15,13 @@ Os operadores não precisam ativar logs. Se uma ação falhar, devem informar ao
 A senha tem no mínimo oito caracteres, incluindo número, letra maiúscula e caractere especial. O autenticador é uma proteção adicional ao acesso do dono.
 
 Se perder o telefone e a chave, a recuperação exige manutenção autenticada no servidor, com backup prévio, invalidação das provas de acesso e novo provisionamento controlado. Não existe recuperação global pelo perfil Administrador de condomínio.
+
+## Recuperar acesso de um convidado
+
+Na seção Recuperação de acesso do painel aparecem as solicitações que as pessoas enviam pela tela de login. Não há envio de e-mail ou aviso externo automático: abra o painel para consultar a fila.
+
+Confirme a identidade por um telefone ou contato que você já conhece; uma solicitação no app sozinha não comprova identidade. Registre como confirmou, marque a confirmação e clique em Emitir token. Entregue o token pessoalmente ao solicitante, que deverá definir a nova senha no formulário Token de recuperação. Vale 30 minutos, uma única vez.
+
+Se a pessoa perdeu o telefone/autenticador, marque Também redefinir autenticador. A chave antiga será removida quando o token for usado; as sessões antigas serão revogadas e a pessoa precisará cadastrar o novo QR no próximo login. Para perda apenas da senha, o autenticador continua obrigatório e não é removido. Para um convite expirado, o painel emite um novo token de ativação, válido por 48 horas. Um pedido indevido pode ser recusado.
+
+Administradores de condomínio não podem emitir esses tokens nem recuperar a conta do dono. Não envie senhas ou QR no campo de verificação de identidade.

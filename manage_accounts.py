@@ -21,6 +21,7 @@ def invite(login, name, roles, condominium='sqa'):
         if cur.fetchone():
             raise SystemExit('A conta já existe; nenhum convite foi criado.')
         cur.execute("INSERT INTO users(id,display_name,login_display,login_normalized,status) VALUES(%s,%s,%s,%s,'invited')", (user_id, name.strip(), login.strip(), normalized))
+        cur.execute('UPDATE users SET mfa_required=true WHERE id=%s',(user_id,))
         cur.execute("INSERT INTO memberships(id,user_id,condominium_id,status) VALUES(%s,%s,%s,'active')", (membership_id, user_id, condominium))
         for role in roles:
             cur.execute('INSERT INTO role_grants(id,membership_id,user_id,condominium_id,role,basis) VALUES(%s,%s,%s,%s,%s,%s)', (uuid.uuid4(), membership_id, user_id, condominium, role, 'Bootstrap local documentado'))
