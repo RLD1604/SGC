@@ -12,7 +12,7 @@
 | Logs individuais | Identidade do servidor, ação, recursos/IDs, resultado, campos alterados sem valores; lixeira/restauração específicas; relatos do navegador distinguidos de acessos entregues pela API |
 | Base inicial limpa | Desktop/VPS: records=0, editions=0, publications=0, media=0; dono ativo=1, convidados=5, owner grant=1; autenticação do dono preservada |
 | Revisão e testes | 65 testes Python, privacidade Node, integração PostgreSQL e Chrome desktop/celular aprovados |
-| Publicação segura | Mesma imagem saudável nos dois ambientes; outros contêineres iguais; banco e contêiner anteriores preservados; GitHub/Drive em confirmação final |
+| Publicação segura | Mesma imagem saudável nos dois ambientes; outros contêineres iguais; banco e contêiner anteriores preservados; GitHub/Drive confirmados |
 | Manuais | Cinco PDFs de uma página, login/perfil/token/expiração/MFA/recuperação; extração de texto e renderização revisadas, sem publicar tokens no Git |
 
 ## Testes e correções
@@ -50,4 +50,8 @@ Base “zerada” significa sem conteúdo editorial anterior; contas, convites, 
 
 ## Recibo final
 
-Código e backup externo em finalização. Não considerar Drive aprovado antes de confirmar status success, mesmo runId e exatamente quatro arquivos.
+Publicação concluída: Desktop e VPS saudáveis com a mesma imagem final; GitHub main recebeu 0e9a1da (correção de lixeira), seguido deste recibo documental. Onze outros contêineres do VPS preservados com mesmos nomes e imagens. Base ativa em ambos conferida novamente: conteúdo editorial=0, dono ativo=1, convidados=5. Teste adicional da interface confirmou lixeira oculta ao Operador e disponível ao Administrador.
+
+Backup final: runId 20261005T205140Z-fba9311e. SHA-256 local válido, restauração isolada executada pelo serviço de backup, imagem final registrada no manifesto. Envio VPS→Drive status success, mesmo runId, files=4, verifiedAtUtc=2026-10-05T20:52:48Z. Listagem remota confirmou exatamente SUCCESS, manifest.json, sgc-recovery.tar.age e sgc-recovery.tar.age.sha256. Ambos os timers ativos; painel de status atualizado. Agenda permanece diária, sem depender do Desktop.
+
+Uma tentativa de teste JavaScript direto falhou na análise do PowerShell devido ao símbolo $; repetida por stdin sem interpolação, aprovada. Falha do comando, sem alteração do app. Manuais nominais privados prontos; convites de uso único até 07/10/2026 17h25. Nenhum erro pendente encontrado no escopo dos testes executados.
