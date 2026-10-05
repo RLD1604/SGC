@@ -16,4 +16,6 @@ Chrome desktop/celular: ativação, QR, MFA, recuperação, fila exclusiva, bot�
 
 ## Publicação
 
-Em confirmação. Backup anterior cifrado e verificado: 20261005T205140Z-fba9311e no VPS e Drive. Nenhum dado editorial será criado em produção pelos testes.
+Concluída. Código publicado em GitHub main (9f9c993), seguido deste recibo documental. Desktop e VPS saudáveis, schema 10, mesma imagem sha256:a8f9f6f00f63122fb3e517c09a948c877d4538e12ff48d6c6649171ff9dd9c94. Onze outros contêineres preservados. Convites conferidos nos dois bancos: cinco válidos, correspondentes aos manuais, um dono ativo e conteúdo editorial=0. Autenticador real de rodrigo permanece cadastrado; senha não alterada. Backup anterior cifrado e verificado: 20261005T205140Z-fba9311e; dump local prévio SHA-256 abf0c8a27ffccb65c44307735fc49b244a1f67e255c8765d0112ef1d79e239c7.
+
+Backup final 20261005T220209Z-a0c3a4d8: restauração isolada executada pelo serviço, pacote cifrado com SHA-256 válido no VPS; Drive status success, mesmo runId, files=4, verifiedAtUtc=2026-10-05T22:08:49Z. Listagem remota confirmou exatamente os quatro arquivos previstos. Timers diários ativos e painel de status atualizado. Sem erros pendentes identificados no escopo testado.
