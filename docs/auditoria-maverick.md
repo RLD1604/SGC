@@ -1,4 +1,16 @@
-# Teste real Maverick — QA aprovada; publicação em preparação
+# Teste real Maverick — concluído e publicado: 0.2.7-beta.2
+
+## Resultado atual
+
+Bateria planejada aprovada: quatro jornadas completas no Chrome (35 grupos de verificações, sem exceções JavaScript), 67 regressões Python, verificações Node de perfis/privacidade, integração de segurança em PostgreSQL isolado e auditoria de autoria/hashes/logs. Jev classificou cinco incidentes sintéticos em uma chamada e concordou com a revisão humana em todos; classificação consultiva, não garantia de ausência de qualquer defeito futuro.
+
+Versão 0.2.7-beta.2 publicada no Desktop e VPS; GitHub main contém o mesmo código. Quatorze arquivos de execução comparados por SHA-256 com normalização de finais de linha: Git=Desktop=VPS. Imagem final sgc-codex:maverick-20261006b, sha256:a70be7536556601c7f078294c9088d0793bc968dc181004dee8ddb9be96e6aac. Saúde pública e /SGC/version.json confirmados; rollback preservado. Outros contêineres/imagens em execução permaneceram iguais.
+
+Bancos reais preservados: zero registros, informes, publicações e mídia; um dono ativo e cinco convites válidos conferidos contra os recibos dos manuais. Nenhuma conta/dado de Maverick foi publicado. Manuais e tokens não precisaram ser regenerados. QA encerrado, bancos sintéticos e evidências mantidos.
+
+Backup final 20261006T005045Z-4e21939a inclui imagem publicada e PostgreSQL: restauração isolada de 37 tabelas, pacote age cifrado, SHA-256 válido. Drive confirmou por download quatro arquivos coincidentes: SUCCESS, manifest.json, sgc-recovery.tar.age, sgc-recovery.tar.age.sha256. last-success corresponde ao mesmo runId; ambos os timers permanecem ativos. A primeira falha pré-publicação de backup não teve causa confirmada: foi registrada e instrumentada; as duas execuções subsequentes passaram, e o monitor permanece responsável por sinalizar reincidência. Não foi contornada validação de restauração ou integridade.
+
+O histórico abaixo conserva erros, pausas e correções; seus estados intermediários não representam o resultado atual.
 
 ## Ambiente e limite
 
@@ -97,3 +109,18 @@ Backup pré-publicação: dump local sgc-pre-maverick-20261006.dump, SHA-256 488
 Primeira troca teve health OK, mas a verificação adicional de /SGC/version.json retornou 500. Evidência confirmou after_request headers tentando response.get_json em arquivo servido com direct_passthrough. É um caso anterior não coberto na bateria, exposto ao consultar metadata estática sob prefixo; não é erro de banco, autenticação ou versão de imagem. Plano: aplicar reescrita somente a respostas JSON materializadas, preservar streaming/ETag dos arquivos estáticos, testar bytes idênticos e If-None-Match/304. Implementado guard not response.direct_passthrough, novo teste verificou 200, bytes, ETag e 304. 67 regressões passaram. Aviso de arquivo aberto no teste 304 foi saneado fechando resposta; repetição dos dez testes de prefixo passou sem esse aviso. Alteração restrita a headers de arquivos estáticos; as jornadas já aprovadas mantêm o mesmo código de interface.
 
 Repetição da publicação utiliza sgc-codex:maverick-20261006b. Imagem final sha256:a70be7536556601c7f078294c9088d0793bc968dc181004dee8ddb9be96e6aac; arquivo exportado SHA-256 410a3929d6a4879601c062520d7e66e9f9931a69a2c2f726fca9fec2951082c1. Roteiro agora inclui verificação pública de version.json no gate de rollback. Cada tentativa preservou seu contêiner anterior; não foram tocados contêineres de outros projetos. Desktop validado antes da segunda troca no VPS.
+
+
+## Comparação final do plano com execução
+
+| Compromisso | Evidência final |
+| --- | --- |
+| Reentrada sem consumir convite antigo | Senha+MFA em sessões expiradas; contador TOTP novo; etapa 4 integral aprovada |
+| Privacidade e rastreabilidade | Logs de documento autorizado aceitos, rascunho alheio recusado; 12 tipos de ações com autor e 176 visualizações verificadas |
+| Preservar trabalho em rede/conflito | Download do rascunho, retomada após offline, 409 sem sobrescrita e recuperação local aprovados |
+| Revisar versões anteriores | Etapas 1–4 integralmente aprovadas; 67 regressões e integração PostgreSQL aprovadas |
+| Publicar em ordem | Desktop validado, VPS validado, main enviada ao GitHub; 14 hashes de código iguais |
+| Backup antes/depois e Drive | Dump local prévio; runId pré-publicação e final verificados; Drive final com os quatro arquivos e conferência por download |
+| Preservar piloto e outros projetos | Convites/manuais reais válidos nos dois ambientes; dados editoriais reais=0; demais contêineres preservados |
+
+Sem bloqueador funcional identificado pela bateria ao encerrar. Observação operacional: falha inicial de backup de causa desconhecida está documentada acima; restauração, integridade e cópia final aprovadas, monitor ativo. Não há promessa de teste exaustivo de todas as combinações possíveis.
