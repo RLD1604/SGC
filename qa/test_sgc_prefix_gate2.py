@@ -68,6 +68,25 @@ class PrefixRoutingTests(unittest.TestCase):
                 finally:
                     asset.close()
 
+    def test_static_json_is_streamed_unchanged_with_cache_validation(self):
+        plain = self.client.get('/version.json')
+        mounted = self.client.get('/SGC/version.json')
+        try:
+            self.assertEqual(plain.status_code, 200)
+            self.assertEqual(mounted.status_code, 200)
+            self.assertEqual(plain.data, mounted.data)
+            self.assertEqual(mounted.data, (ROOT / 'public/version.json').read_bytes())
+            self.assertEqual(mounted.headers['ETag'], plain.headers['ETag'])
+            cached = self.client.get('/SGC/version.json', headers={'If-None-Match': mounted.headers['ETag']})
+            try:
+                self.assertEqual(cached.status_code, 304)
+                self.assertEqual(cached.data, b'')
+            finally:
+                cached.close()
+        finally:
+            plain.close()
+            mounted.close()
+
     def test_api_is_mounted_and_anonymous_access_is_denied_normally(self):
         response = self.client.get("/SGC/api/auth/me")
         self.assertEqual(response.status_code, 401)

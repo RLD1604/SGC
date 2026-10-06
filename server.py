@@ -476,7 +476,7 @@ def headers(response):
     # Keep media references canonical in PostgreSQL and prefix only the HTTP
     # representation. The matching request normalizer below removes this
     # mount prefix before application code can persist a submitted document.
-    if APP_BASE_PATH and response.is_json:
+    if APP_BASE_PATH and response.is_json and not response.direct_passthrough:
         payload = response.get_json(silent=True)
         if payload is not None:
             response.set_data(json.dumps(_rewrite_media_urls(payload, APP_BASE_PATH), ensure_ascii=False, separators=(',', ':')))
