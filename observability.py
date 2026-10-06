@@ -22,10 +22,12 @@ def record(connect, event):
             cur.execute('INSERT INTO diagnostic_retention_runs(day) VALUES(current_date) ON CONFLICT DO NOTHING RETURNING day')
             if cur.fetchone():
                 cur.execute("DELETE FROM diagnostic_events WHERE occurred_at<now()-interval '90 days'")
-            cur.execute('INSERT INTO diagnostic_events(id,actor_user_id,condominium_id,request_id,source,action,result,http_status,duration_ms,metadata) VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)',
+            cur.execute('INSERT INTO diagnostic_events(id,actor_user_id,condominium_id,request_id,source,action,result,http_status,duration_ms,metadata) VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) ON CONFLICT DO NOTHING',
                 (uuid.uuid4(),event.get('userId'),event.get('condominiumId'),event['requestId'],event['source'],event['action'],event['result'],event.get('httpStatus'),event.get('durationMs'),Json(event.get('metadata',{}))))
+        return True
     except Exception:
         emit({'action':'diagnostics.persist_failed','result':'error','source':'server','requestId':event['requestId']})
+        return False
 
 
 def register_observability(app, connect):
@@ -70,11 +72,18 @@ def register_observability(app, connect):
         if not isinstance(body,dict) or not isinstance(body.get('kind'),str) or not isinstance(body.get('page'),str) or body.get('kind') not in allowed or body.get('page') not in pages:
             return jsonify(error='Relato inválido.'),400
         # Cross-worker quota; identities and tenant come only from the session.
-        with connect() as conn, conn.cursor() as cur:
-            cur.execute('INSERT INTO diagnostic_quotas(user_id,window_start,hits) VALUES(%s,date_trunc(\'minute\',now()),1) ON CONFLICT(user_id) DO UPDATE SET hits=CASE WHEN diagnostic_quotas.window_start=date_trunc(\'minute\',now()) THEN diagnostic_quotas.hits+1 ELSE 1 END,window_start=date_trunc(\'minute\',now()) RETURNING hits',(actor['user_id'],))
-            hits=cur.fetchone()[0]
-        if hits>30:
-            return jsonify(error='Limite de relatos atingido.'),429
+        try:
+            with connect() as conn, conn.cursor() as cur:
+                cur.execute('INSERT INTO diagnostic_quotas(user_id,window_start,hits) VALUES(%s,date_trunc(\'minute\',now()),1) ON CONFLICT(user_id) DO UPDATE SET hits=CASE WHEN diagnostic_quotas.window_start=date_trunc(\'minute\',now()) THEN diagnostic_quotas.hits+1 ELSE 1 END,window_start=date_trunc(\'minute\',now()) RETURNING hits,GREATEST(1,CEIL(EXTRACT(EPOCH FROM window_start+interval \'1 minute\'-now())))::integer',(actor['user_id'],))
+                hits,retry_after=cur.fetchone()
+        except Exception:
+            response=jsonify(error='Relato temporariamente indisponível.');response.status_code=503
+            response.headers['Retry-After']='5'
+            return response
+        if hits>120:
+            response=jsonify(error='Limite de relatos atingido.');response.status_code=429
+            response.headers['Retry-After']=str(retry_after)
+            return response
         metadata={'page':body['page'],'untrustedClientReport':True}
         if body['kind']=='document_view':
             checker=app.config.get('AUTH_DIAGNOSTIC_RESOURCE')
@@ -86,7 +95,13 @@ def register_observability(app, connect):
         except (ValueError,TypeError,AttributeError): pass
         try: metadata['clientIncidentId']=str(uuid.UUID(body.get('clientIncidentId','')))
         except (ValueError,TypeError,AttributeError): pass
-        record(connect,{'source':'browser','action':body['kind'],'result':'reported','requestId':g.request_id,
+        try: metadata['reportId']=str(uuid.UUID(body.get('reportId','')))
+        except (ValueError,TypeError,AttributeError): pass
+        persisted=record(connect,{'source':'browser','action':body['kind'],'result':'reported','requestId':g.request_id,
             'userId':actor['user_id'],'condominiumId':(actor.get('memberships') or [None])[0], 'metadata':metadata})
+        if not persisted:
+            response=jsonify(error='Relato temporariamente indisponível.');response.status_code=503
+            response.headers['Retry-After']='5'
+            return response
         return jsonify(status='received'),202
     return client_report

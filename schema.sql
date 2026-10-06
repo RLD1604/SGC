@@ -264,6 +264,12 @@ CREATE TABLE IF NOT EXISTS diagnostic_events (
 CREATE INDEX IF NOT EXISTS diagnostic_events_time ON diagnostic_events(occurred_at DESC,id DESC);
 CREATE INDEX IF NOT EXISTS diagnostic_events_request ON diagnostic_events(request_id);
 CREATE INDEX IF NOT EXISTS diagnostic_events_actor ON diagnostic_events(actor_user_id,occurred_at DESC);
+-- Schema 11: bounded client retries preserve one persisted event per actor/report.
+-- Historical reports without a reportId remain unaffected.
+CREATE UNIQUE INDEX IF NOT EXISTS diagnostic_events_browser_report
+  ON diagnostic_events(actor_user_id,(metadata->>'reportId'))
+  WHERE source='browser' AND metadata ? 'reportId';
+INSERT INTO schema_versions(version) VALUES(11) ON CONFLICT DO NOTHING;
 CREATE TABLE IF NOT EXISTS diagnostic_quotas(user_id uuid PRIMARY KEY REFERENCES users(id),window_start timestamptz NOT NULL,hits integer NOT NULL);
 CREATE TABLE IF NOT EXISTS diagnostic_retention_runs(day date PRIMARY KEY);
 INSERT INTO schema_versions(version) VALUES(8) ON CONFLICT DO NOTHING;

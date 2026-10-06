@@ -10,7 +10,7 @@ POSTGRES_IMAGE=postgres:17
 # Exemplo: age1xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 AGE_RECIPIENT=
 
-# Diretório temporário preferencialmente em tmpfs. Nenhum segredo é gravado no pacote.
+# Diretório temporário preferencialmente em tmpfs. Credenciais MFA essenciais à recuperação ficam somente dentro do pacote cifrado age; nunca no manifesto externo ou no Git.
 STAGING_ROOT=/run/sgc-backup
 
 # Nesta primeira versão a retenção somente informa candidatos; nunca exclui arquivos.

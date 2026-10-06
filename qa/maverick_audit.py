@@ -22,4 +22,13 @@ with connect() as conn,conn.cursor() as cur:
  cur.execute('SELECT metadata FROM diagnostic_events UNION ALL SELECT metadata FROM audit_events')
  logs=json.dumps(cur.fetchall(),ensure_ascii=False)
  assert all(person[field] not in logs for person in people for field in ('password','token'))
+ session_file=Path(os.getenv('QA_SESSION_FILE','/verify/sessions.json'))
+ if session_file.is_file():
+  sessions=json.loads(session_file.read_text(encoding='utf-8'))
+  for session in sessions.values():
+   if session.get('key'):assert session['key'] not in logs
+   for cookie in session.get('state',{}).get('cookies',[]):
+    if cookie.get('value'):assert cookie['value'] not in logs
+ cur.execute("SELECT document->>'text' FROM records")
+ assert all(not content or len(content)<20 or content not in logs for (content,) in cur.fetchall())
 print(json.dumps({'status':'passed','officialArtifactsVerified':len(artifacts),'businessActions':len(actions),'identifiedDocumentViews':reads,'recoveryQueued':True,'credentialLeak':False}))

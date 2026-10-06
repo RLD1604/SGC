@@ -33,6 +33,9 @@ Configuration hooks:
     Delivers activation/recovery tokens.  Tokens are never logged.
 ``AUTH_COOKIE_SECURE``
     Whether cookies receive ``Secure`` (default false for the loopback pilot).
+``AUTH_TRUSTED_PROXY_IPS``
+    Comma-separated exact transport peer IPs allowed to supply one normalized
+    X-Forwarded-For address. The proxy must overwrite untrusted client headers.
 
 The optional audit callback is called as
 ``callback(action, actor_user_id=..., subject_user_id=..., outcome=...,
@@ -42,11 +45,15 @@ details=...)`` and must never persist credentials or raw tokens.
 from __future__ import annotations
 
 import hashlib
+import hmac
+import ipaddress
+import os
 import secrets
 import unicodedata
 import uuid
 from datetime import datetime, timedelta, timezone
 from functools import wraps
+from pathlib import Path
 from typing import Any, Callable
 
 from argon2 import PasswordHasher
@@ -62,6 +69,8 @@ INVITATION_TIMEOUT = timedelta(hours=48)
 RECOVERY_TIMEOUT = timedelta(minutes=30)
 MIN_PASSWORD_LENGTH = 8
 MAX_PASSWORD_LENGTH = 1024
+AUTH_RATE_WINDOW_SECONDS = 600
+AUTH_RATE_LIMITS = {"login": 30, "activation": 20, "recovery_complete": 20}
 PASSWORD_HASHER = PasswordHasher()
 _dummy_password_hash: str | None = None
 
@@ -293,7 +302,90 @@ class AuthService:
         )
         return session_id, session_token, csrf_token
 
+    def _quota_client_address(self):
+        """Only explicitly listed proxy peers may supply one normalized XFF IP.
+
+        No networks, chains or arbitrary forwarded headers establish trust.
+        Missing/invalid headers fall back to the peer's tighter shared bucket.
+        The deployment must make its trusted proxy overwrite incoming XFF.
+        """
+        peer = request.remote_addr or "unknown"
+        try:
+            peer = str(ipaddress.ip_address(peer))
+        except ValueError:
+            return peer
+        configured = self.app.config.get("AUTH_TRUSTED_PROXY_IPS", os.getenv("AUTH_TRUSTED_PROXY_IPS", ""))
+        entries = configured.split(",") if isinstance(configured, str) else configured
+        trusted = set()
+        if isinstance(entries, (list, tuple, set)):
+            for entry in entries:
+                try:
+                    trusted.add(str(ipaddress.ip_address(entry.strip())))
+                except (ValueError, AttributeError):
+                    continue
+        if peer in trusted:
+            forwarded = request.headers.getlist("X-Forwarded-For")
+            if len(forwarded) == 1:
+                try:
+                    candidate = forwarded[0].strip()
+                    if "%" not in candidate:
+                        return str(ipaddress.ip_address(candidate))
+                except ValueError:
+                    pass
+        return peer
+
+    def _public_auth_quota(self, operation):
+        """Persist an atomic IP quota before expensive password work.
+
+        REMOTE_ADDR establishes proxy trust; only an explicitly trusted peer
+        may supply a single valid client IP in X-Forwarded-For. The existing
+        recovery quota table stores a domain-separated keyed digest, not an IP.
+        Exit this separate transaction before hashing or locking user rows.
+        """
+        try:
+            address = self._quota_client_address()
+            secret = Path(os.environ["USER_MFA_KEY_FILE"]).read_bytes()
+            if not secret:
+                raise ValueError("Missing quota key")
+            key = hmac.new(
+                secret,
+                b"sgc:public-auth:v1:" + operation.encode("ascii") + b":" + address.encode(),
+                hashlib.sha256,
+            ).digest()
+            with self.connect() as conn, conn.cursor() as cur:
+                cur.execute(
+                    """INSERT INTO public_recovery_quotas(key,window_started_at,hits)
+                   VALUES(%s,now(),1)
+                   ON CONFLICT(key) DO UPDATE SET
+                     hits=CASE WHEN public_recovery_quotas.window_started_at>
+                       now()-(%s * interval '1 second')
+                       THEN public_recovery_quotas.hits+1 ELSE 1 END,
+                     window_started_at=CASE WHEN public_recovery_quotas.window_started_at>
+                       now()-(%s * interval '1 second')
+                       THEN public_recovery_quotas.window_started_at ELSE now() END
+                   RETURNING hits,GREATEST(1,CEIL(EXTRACT(EPOCH FROM
+                     window_started_at+(%s * interval '1 second')-now())))::integer""",
+                    (key, AUTH_RATE_WINDOW_SECONDS, AUTH_RATE_WINDOW_SECONDS, AUTH_RATE_WINDOW_SECONDS),
+                )
+                hits, retry_after = cur.fetchone()
+        except Exception:
+            # Fail closed before any hash work. No exception/key/DB detail is
+            # returned or sent through the optional audit callback.
+            response = jsonify(error="Autenticação temporariamente indisponível. Tente novamente em breve.")
+            response.status_code = 503
+            response.headers["Retry-After"] = "30"
+            return response
+        if hits > AUTH_RATE_LIMITS[operation]:
+            response = jsonify(error="Muitas tentativas. Aguarde antes de tentar novamente.")
+            response.status_code = 429
+            response.headers["Retry-After"] = str(retry_after)
+            return response
+        return None
+
     def login(self):
+        limited = self._public_auth_quota("login")
+        if limited is not None:
+            return limited
         body = request.get_json(silent=True) or {}
         try:
             login = normalize_login(body.get("login"))
@@ -441,6 +533,9 @@ class AuthService:
         return jsonify(status="created", userId=str(user_id)), 201
 
     def activate(self):
+        limited = self._public_auth_quota("activation")
+        if limited is not None:
+            return limited
         body = request.get_json(silent=True) or {}
         try:
             validate_password(body.get("password"))
@@ -506,6 +601,9 @@ class AuthService:
         return jsonify(status="accepted"), 202
 
     def complete_recovery(self):
+        limited = self._public_auth_quota("recovery_complete")
+        if limited is not None:
+            return limited
         body = request.get_json(silent=True) or {}
         try:
             validate_password(body.get("password"))

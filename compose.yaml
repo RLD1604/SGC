@@ -33,7 +33,7 @@ services:
     security_opt: [no-new-privileges:true]
     labels:
       app.display-name: Sistema-Gestão-Comunicação-Condomínio
-      app.version: 0.2.7-beta.2
+      app.version: 0.2.7-beta.3
   database:
     image: postgres:17-alpine
     restart: unless-stopped

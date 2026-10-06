@@ -1,5 +1,7 @@
 import sys
 import json
+import os
+import uuid
 import unittest
 from pathlib import Path
 from unittest.mock import MagicMock,patch
@@ -12,7 +14,7 @@ class Diagnostics(unittest.TestCase):
         app=Flask(__name__)
         conn=MagicMock()
         cur=conn.__enter__.return_value.cursor.return_value.__enter__.return_value
-        cur.fetchone.return_value=(1,)
+        cur.fetchone.return_value=(1,42)
         def connect():
             if broken: raise RuntimeError('sensitive body must never appear')
             return conn
@@ -62,8 +64,72 @@ class Diagnostics(unittest.TestCase):
         self.assertEqual(event['condominiumId'],'sqa')
         self.assertNotIn('SECRET',json.dumps(event))
         self.assertNotIn('PRIVATE',json.dumps(event))
-        cur.fetchone.return_value=(31,)
+        cur.fetchone.return_value=(121,42)
         response=app.test_client().post('/api/diagnostics/client',json={'kind':'navigation','page':'inicio'})
         self.assertEqual(response.status_code,429)
+        self.assertEqual(response.headers['Retry-After'],'42')
+
+    @patch('observability.emit')
+    def test_document_report_id_is_sanitized_and_actor_is_server_owned(self,emit):
+        app,cur=self.app()
+        app.config['AUTH_DIAGNOSTIC_RESOURCE']=lambda actor,kind,rid: {'id':rid,'type':kind} if rid=='allowed' else None
+        report_id='00000000-0000-0000-0000-000000000035'
+        response=app.test_client().post('/api/diagnostics/client',json={'kind':'document_view','page':'editor','resourceType':'edition','resourceId':'allowed','reportId':report_id,'userId':'forged'})
+        self.assertEqual(response.status_code,202)
+        event=emit.call_args_list[0].args[0]
+        self.assertEqual(event['metadata']['reportId'],report_id)
+        self.assertNotEqual(event['userId'],'forged')
+        self.assertEqual(app.test_client().post('/api/diagnostics/client',json={'kind':'document_view','page':'editor','resourceType':'edition','resourceId':'denied'}).status_code,404)
+        emit.reset_mock()
+        cur.fetchone.return_value=(120,42)
+        self.assertEqual(app.test_client().post('/api/diagnostics/client',json={'kind':'navigation','page':'inicio','reportId':'SECRET-invalid'}).status_code,202)
+        self.assertNotIn('reportId',emit.call_args_list[0].args[0]['metadata'])
+        self.assertNotIn('SECRET',str(emit.call_args_list))
+
+    @patch('observability.emit')
+    def test_client_persistence_failure_is_retryable_without_breaking_normal_api(self,emit):
+        app,cur=self.app()
+        with patch('observability.record',return_value=False):
+            result=app.test_client().post('/api/diagnostics/client',json={'kind':'navigation','page':'inicio'})
+            self.assertEqual(result.status_code,503)
+            self.assertEqual(result.headers['Retry-After'],'5')
+            self.assertEqual(app.test_client().get('/api/test/example').status_code,200)
+        broken,_=self.app(True)
+        self.assertEqual(broken.test_client().post('/api/diagnostics/client',json={'kind':'navigation','page':'inicio'}).status_code,503)
+
+
+@unittest.skipUnless(os.environ.get('QA_DIAGNOSTICS_DB')=='1','isolated PostgreSQL opt-in')
+class DiagnosticsPostgres(unittest.TestCase):
+    @patch('observability.emit')
+    def test_35_views_and_repeated_report_id_persist_once(self,emit):
+        if not os.environ.get('DB_NAME','').startswith('sgc_owner_qa_'):
+            self.fail('Refusing non-QA database')
+        from server import connect
+        user_id=str(uuid.uuid4());login='qa-diagnostics-'+uuid.uuid4().hex
+        app=Flask(__name__);report=register_observability(app,connect)
+        @app.before_request
+        def actor():g.principal={'user_id':user_id,'memberships':['sqa']}
+        app.config['AUTH_DIAGNOSTIC_RESOURCE']=lambda actor,kind,rid: {'type':kind,'id':rid} if kind=='edition' else None
+        app.add_url_rule('/api/diagnostics/client','client_diagnostics',report,methods=['POST'])
+        try:
+            with connect() as conn,conn.cursor() as cur:
+                cur.execute('SELECT current_database()');self.assertEqual(cur.fetchone()[0],os.environ['DB_NAME'])
+                cur.execute("SELECT 1 FROM pg_indexes WHERE indexname='diagnostic_events_browser_report'");self.assertIsNotNone(cur.fetchone(),'initialize schema 11 before QA')
+                cur.execute("INSERT INTO users(id,display_name,login_display,login_normalized,status) VALUES(%s,'Synthetic diagnostics',%s,%s,'active')",(user_id,login,login))
+            ids=[str(uuid.uuid4()) for _ in range(35)]
+            client=app.test_client()
+            for report_id in ids:
+                body={'kind':'document_view','page':'editor','resourceType':'edition','resourceId':'synthetic','reportId':report_id}
+                self.assertEqual(client.post('/api/diagnostics/client',json=body).status_code,202)
+            # Acknowledgement lost after commit: a retry preserves its UUID.
+            self.assertEqual(client.post('/api/diagnostics/client',json=body).status_code,202)
+            with connect() as conn,conn.cursor() as cur:
+                cur.execute("SELECT count(*),count(DISTINCT metadata->>'reportId') FROM diagnostic_events WHERE actor_user_id=%s AND source='browser'",(user_id,))
+                self.assertEqual(cur.fetchone(),(35,35))
+        finally:
+            with connect() as conn,conn.cursor() as cur:
+                cur.execute('DELETE FROM diagnostic_events WHERE actor_user_id=%s',(user_id,))
+                cur.execute('DELETE FROM diagnostic_quotas WHERE user_id=%s',(user_id,))
+                cur.execute('DELETE FROM users WHERE id=%s',(user_id,))
 
 if __name__=='__main__':unittest.main()
