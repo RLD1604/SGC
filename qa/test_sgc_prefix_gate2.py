@@ -56,7 +56,7 @@ class PrefixRoutingTests(unittest.TestCase):
         self.assertIn('<base href="/SGC/">', body)
         self.assertIn('<meta name="sqa-base-path" content="/SGC">', body)
         self.assertIn('src="/SGC/base-path.js"', body)
-        self.assertIn('href="/SGC/style.css"', body)
+        self.assertRegex(body, r'href="/SGC/style\.css(?:\?v=\d+)?"')
         self.assertIn('src="/SGC/vendor/tinymce/tinymce.min.js"', body)
         self.assertNotIn("/SGC/SGC", body)
         for path in ("base-path.js", "style.css", "vendor/tinymce/tinymce.min.js", "photo-editor.js", "word-processor.js"):
@@ -145,7 +145,7 @@ class UnprefixedCompatibilityTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         body = response.get_data(as_text=True)
         self.assertNotIn('name="sqa-base-path"', body)
-        self.assertIn('href="/style.css"', body)
+        self.assertRegex(body, r'href="/style\.css(?:\?v=\d+)?"')
         self.assertEqual(server.app.config["AUTH_COOKIE_PATH"], "/")
         self.assertNotIn("AUTH_COOKIE_NAME", server.app.config)
 

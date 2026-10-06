@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 umask 077
+# Report only line and exit status; commands/configuration can contain secrets.
+trap 'rc=$?; printf "SGC_BACKUP_ERROR line=%s exit=%s\n" "$LINENO" "$rc" >&2; exit "$rc"' ERR
 
 CONFIG=${SGC_BACKUP_CONFIG:-/etc/sgc-backup/sgc-backup.conf}
 [[ -r "$CONFIG" ]] || { echo "Configuração ausente: $CONFIG" >&2; exit 2; }

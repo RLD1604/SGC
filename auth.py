@@ -378,9 +378,6 @@ class AuthService:
         return bool(callback and callback(current_principal(), condominium_id))
 
     def issue_invitation(self):
-        delivery = self.app.config.get("AUTH_DELIVER_TOKEN")
-        if not delivery:
-            return jsonify(error="Entrega de convite não configurada."), 503
         body = request.get_json(silent=True) or {}
         try:
             login = normalize_login(body.get("login"))
@@ -398,6 +395,9 @@ class AuthService:
             return jsonify(error="Condomínio fora do seu escopo."), 403
         if not self._can_manage(condominium_id):
             return jsonify(error="Ação não permitida."), 403
+        delivery = self.app.config.get("AUTH_DELIVER_TOKEN")
+        if not delivery:
+            return jsonify(error="Entrega de convite não configurada."), 503
         raw, digest = generate_token()
         invitation_id = uuid.uuid4()
         actor = current_principal()

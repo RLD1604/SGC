@@ -6,3 +6,5 @@ body.auth-required .workspace{margin-left:0;min-height:100vh;display:grid;place-
 .auth-panel{width:min(520px,calc(100vw - 32px));margin:auto}.auth-panel form{display:grid;gap:14px;margin:18px 0}.auth-panel details{margin-top:24px}.auth-panel .error{color:#9b1c1c}
 
 .auth-qr{display:block;width:320px;max-width:100%;height:auto;margin:16px 0}.auth-panel code{overflow-wrap:anywhere}.auth-panel select{max-width:100%}
+
+[hidden]{display:none!important}

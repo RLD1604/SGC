@@ -1,13 +1,25 @@
 'use strict';
 let serverRevision=0,saving=Promise.resolve(),storageBlocked=false,pendingOperation=null,activeDraft=null,renderedHash='#inicio',bypassDraftGuard=false,persistedState=null;
 const draftQueues=new Map(),draftVersions=new Map();
+let saveBusyCount=0,saveControlStates=new Map();
+function lockSavingControls(){
+ if(saveBusyCount++>0)return;
+ document.querySelector('#main')?.setAttribute('aria-busy','true');
+ for(const node of document.querySelectorAll('#main button,#main input,#main select,#main textarea,#dialog button,#dialog input')){saveControlStates.set(node,node.disabled);node.disabled=true;}
+}
+function unlockSavingControls(){
+ if(--saveBusyCount>0)return;
+ for(const [node,disabled] of saveControlStates)if(node.isConnected)node.disabled=disabled;
+ saveControlStates.clear();document.querySelector('#main')?.removeAttribute('aria-busy');
+}
+
 function draftStatus(text){let n=document.querySelector('#draft-status');if(!n){n=document.createElement('span');n.id='draft-status';n.setAttribute('role','status');document.querySelector('.demo-note')?.append(n);}if(n)n.textContent=text;}
 function draftStore(mode,value){return new Promise((resolve,reject)=>{if(!authSession?.user_id)return reject(Error('Conta não identificada para o rascunho.'));const r=indexedDB.open('sqa-comunicacao-prototipo',3);r.onupgradeneeded=()=>{const d=r.result;if(!d.objectStoreNames.contains('app'))d.createObjectStore('app');if(!d.objectStoreNames.contains('drafts'))d.createObjectStore('drafts');if(!d.objectStoreNames.contains('draftsByUser'))d.createObjectStore('draftsByUser');};r.onerror=()=>reject(r.error);r.onsuccess=()=>{const d=r.result,t=d.transaction('draftsByUser',mode==='read'?'readonly':'readwrite'),s=t.objectStore('draftsByUser'),raw=mode==='read'?value:value.key,key=authSession.user_id+':'+(authSession.platformOwner?'space:'+authSession.memberships[0]+':':'')+raw,item=mode==='read'?null:{...value,key},q=mode==='read'?s.get(key):mode==='delete'?s.delete(key):s.put(item,key);q.onsuccess=()=>resolve(q.result);q.onerror=()=>reject(q.error);t.oncomplete=()=>d.close();};});}
 function draftQueue(key,job){const next=(draftQueues.get(key)||Promise.resolve()).catch(()=>{}).then(job);draftQueues.set(key,next);return next;}
 function markDraftDirty(){const d=activeDraft;if(!d)return;d.dirty=true;draftStatus('Alterações não salvas');const v=(draftVersions.get(d.key)||0)+1;draftVersions.set(d.key,v);const snapshot=d.capture();draftQueue(d.key,async()=>{if(draftVersions.get(d.key)===v)await draftStore('write',{key:d.key,snapshot,updatedAt:new Date().toISOString()});}).catch(()=>notify('Não foi possível guardar a cópia local. Baixe o rascunho antes de sair.'));}
 async function clearActiveDraft(){const d=activeDraft;if(!d)return;activeDraft=null;const v=(draftVersions.get(d.key)||0)+1;draftVersions.set(d.key,v);try{await draftQueue(d.key,()=>draftStore('delete',{key:d.key}));draftStatus('Salvo');}catch{draftStatus('Alterações não salvas');}}
 function unmountDraft(){if(activeDraft&&!activeDraft.dirty)activeDraft=null;}
-async function mountDraft({key,root,capture,restore,saveCurrent}){const d={key,root,capture,restore,saveCurrent,dirty:false};activeDraft=d;draftStatus('Salvo');try{const saved=await draftStore('read',key);if(activeDraft!==d||!root.isConnected)return;if(saved?.snapshot){await restore(saved.snapshot);if(activeDraft!==d||!root.isConnected)return;d.dirty=true;draftStatus('Alterações não salvas · rascunho recuperado');notify('Rascunho recuperado neste navegador.');}}catch{if(activeDraft===d)draftStatus('Não foi possível ler o rascunho local.');}}
+async function mountDraft({key,root,capture,restore,saveCurrent}){const d={key,root,capture,restore,saveCurrent,dirty:false};activeDraft=d;draftStatus('Salvo');try{const saved=await draftStore('read',key);if(activeDraft!==d||!root.isConnected||d.dirty)return;if(saved?.snapshot){await restore(saved.snapshot);if(activeDraft!==d||!root.isConnected)return;d.dirty=true;draftStatus('Alterações não salvas · rascunho recuperado');notify('Rascunho recuperado neste navegador.');}}catch{if(activeDraft===d)draftStatus('Não foi possível ler o rascunho local.');}}
 function goTo(target){bypassDraftGuard=true;location.hash=target.replace(/^#/,'');}
 function closeDraftDialog(){const d=document.querySelector('#draft-navigation');if(d){d.close();d.remove();}}
 function draftDialog(target){if(!activeDraft?.dirty)return goTo(target);closeDraftDialog();const d=document.createElement('dialog');d.id='draft-navigation';d.innerHTML='<h2>Há alterações não salvas</h2><p>Salve antes de sair, continue editando ou descarte este rascunho.</p><div class="actions"><button id="draft-save" class="primary">Salvar e sair</button><button id="draft-stay">Continuar editando</button><button id="draft-discard" class="danger">Descartar alterações</button></div>';document.body.append(d);d.querySelector('#draft-stay').onclick=closeDraftDialog;d.querySelector('#draft-discard').onclick=async()=>{await clearActiveDraft();closeDraftDialog();goTo(target);};d.querySelector('#draft-save').onclick=async()=>{const b=d.querySelector('#draft-save');b.disabled=true;draftStatus('Salvando');try{if(await activeDraft?.saveCurrent?.()){await clearActiveDraft();closeDraftDialog();goTo(target);return;}}finally{if(d.isConnected)b.disabled=false;}draftStatus('Alterações não salvas');};d.addEventListener('cancel',e=>e.preventDefault());d.showModal();}
@@ -44,9 +56,20 @@ async function persistDocuments(snapshot){
  if(JSON.stringify(snapshot.publications)!==JSON.stringify(before.publications))throw Error('A publicação oficial deve usar o fluxo autenticado de aprovação.');
  return {state:snapshot};
 }
-function persist(){const op=saving.catch(()=>{}).then(async()=>{if(storageBlocked)throw Error('Salvamento interrompido. Resolva o aviso para continuar.');const snapshot=pendingOperation?.snapshot||structuredClone(state),key=pendingOperation?.key||crypto.randomUUID();pendingOperation={key,snapshot};draftStatus('Salvando');try{const result=await persistDocuments(snapshot);state=result.state;persistedState=structuredClone(state);pendingOperation=null;draftStatus('Salvo');return result;}catch(error){protectDraft(error.message,error.conflict);draftStatus('Alterações não salvas');throw error;}});saving=op;return op;}
+function persist(){lockSavingControls();const op=saving.catch(()=>{}).then(async()=>{if(storageBlocked)throw Error('Salvamento interrompido. Resolva o aviso para continuar.');const snapshot=pendingOperation?.snapshot||structuredClone(state),key=pendingOperation?.key||crypto.randomUUID();pendingOperation={key,snapshot};draftStatus('Salvando');try{const result=await persistDocuments(snapshot);state=result.state;persistedState=structuredClone(state);pendingOperation=null;draftStatus('Salvo');return result;}catch(error){protectDraft(error.message,error.conflict);draftStatus('Alterações não salvas');throw error;}});saving=op;return op;}
 async function api(path,payload,operationKey,method){const headers={};if(operationKey)headers['Idempotency-Key']=operationKey;try{return await authRequest(path,{method:method||(payload?'POST':'GET'),headers,body:payload===undefined?undefined:JSON.stringify(payload)});}catch(error){error.conflict=error.status===409;throw error;}}
 async function save(message){try{await persist();if(message)notify(message);return true;}catch(e){notify(e.message);return false;}}
+async function refreshWorkspace(){const result=await api('/api/workspace');state=result.state;persistedState=structuredClone(state);return state;}
+let workspaceNavigationSequence=0;
+async function syncWorkspaceView(){
+ if(!state)return;
+ const sequence=++workspaceNavigationSequence,target=location.hash;
+ if(!activeDraft?.dirty&&!storageBlocked&&!saveBusyCount){
+  try{const result=await api('/api/workspace');if(sequence!==workspaceNavigationSequence||target!==location.hash)return;if(!activeDraft?.dirty&&!saveBusyCount){state=result.state;persistedState=structuredClone(state);}}
+  catch(error){notify(error.message);}
+ }
+ if(sequence===workspaceNavigationSequence&&target===location.hash)render();
+}
 async function startStorage(){if(!await ensureAuth())return;try{const result=await api('/api/workspace');state=result.state;persistedState=structuredClone(state);await measureEditorialPhotos(state);render();renderedHash=location.hash||'#inicio';const banner=document.querySelector('.demo-note');banner.innerHTML='Beta operacional · conta individual · dados filtrados por permissão <span id="draft-status" role="status"></span>';}catch(error){if(error.status===401)return renderLogin(error.message);document.querySelector('#main').innerHTML='<section class="panel"><h1>Não foi possível abrir seu espaço</h1><p>'+esc(error.message)+'</p><button onclick="location.reload()">Tentar novamente</button></section>';}}
 
 // The explicit adapters keep the view code small while avoiding synthetic click races.
@@ -57,6 +80,6 @@ document.addEventListener('submit',event=>{const form=event.target;if(form?.id!=
 
 async function confirmDraftSaved(){const d=activeDraft;if(!d)return;d.dirty=false;const v=(draftVersions.get(d.key)||0)+1;draftVersions.set(d.key,v);try{await draftQueue(d.key,()=>draftStore('delete',{key:d.key}));draftStatus('Salvo');}catch{d.dirty=true;draftStatus('Alterações não salvas');}}
 const persistWithoutDraftConfirmation=persist;
-persist=async function(){const result=await persistWithoutDraftConfirmation();await confirmDraftSaved();return result;};
+persist=async function(){try{const result=await persistWithoutDraftConfirmation();await confirmDraftSaved();return result;}finally{unlockSavingControls();}};
 const saveWithDraftRecovery=save;
 save=async function(message){const ok=await saveWithDraftRecovery(message);if(!ok){const form=document.querySelector('#record-form');if(form){delete form.dataset.submitting;form.querySelectorAll('button[type="submit"]').forEach(button=>button.disabled=false);}}return ok;};

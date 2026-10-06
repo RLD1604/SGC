@@ -43,6 +43,21 @@ class AuthPrimitiveTests(unittest.TestCase):
                 response,status=service.issue_invitation()
                 self.assertEqual(status,400)
 
+    def test_invitation_checks_permission_before_delivery_configuration(self):
+        app=Flask(__name__)
+        app.config['AUTH_CAN_MANAGE_ACCOUNTS']=lambda actor, condo: False
+        service=auth.register_auth(app,lambda: self.fail('denied invitation reached database'),None)
+        body={'login':'teste','displayName':'Teste','roles':['administrador'],'condominiumId':'sqa'}
+        with app.test_request_context('/api/auth/invitations',method='POST',json=body):
+            g.principal={'user_id':'operator','memberships':['sqa']}
+            _,status=service.issue_invitation()
+            self.assertEqual(status,403)
+        app.config['AUTH_CAN_MANAGE_ACCOUNTS']=lambda actor, condo: True
+        with app.test_request_context('/api/auth/invitations',method='POST',json=body):
+            g.principal={'user_id':'authorized','memberships':['sqa']}
+            _,status=service.issue_invitation()
+            self.assertEqual(status,503)
+
     def test_normalize_login_is_nfkc_trimmed_and_casefolded(self):
         self.assertEqual(auth.normalize_login("  Usua\u0301RIO@EXEMPLO.COM  "), "usuário@exemplo.com")
         self.assertEqual(auth.normalize_login("ＦＵＮＣＩＯＮＡＲＩＯ"), "funcionario")

@@ -668,9 +668,14 @@ def diagnostic_resource(actor,kind,document_id):
         except ValueError:return None
     table,key,permission={'record':('record_metadata','record_id','item.read'),'edition':('edition_metadata','edition_id','edition.read'),'publication':('official_publications','id','publication.read')}[kind]
     with connect() as conn,conn.cursor() as cur:
-        cur.execute('SELECT condominium_id,'+('NULL' if kind=='publication' else 'author_user_id')+' FROM '+table+' WHERE '+key+'=%s',(document_id,))
+        if kind=='record':
+            cur.execute("SELECT m.condominium_id,m.author_user_id,r.document->>'status' FROM record_metadata m JOIN records r ON r.id=m.record_id WHERE m.record_id=%s",(document_id,))
+        elif kind=='edition':
+            cur.execute('SELECT condominium_id,author_user_id,workflow_state FROM edition_metadata WHERE edition_id=%s',(document_id,))
+        else:
+            cur.execute("SELECT condominium_id,NULL,'published' FROM official_publications WHERE id=%s",(document_id,))
         row=cur.fetchone()
-        if not row or not authorize_request(actor,permission,{'condominium_id':row[0],'author_user_id':str(row[1]) if row[1] else None,'document_id':document_id},cur=cur):return None
+        if not row or not authorize_request(actor,permission,{'condominium_id':row[0],'author_user_id':str(row[1]) if row[1] else None,'document_id':document_id,'state':row[2]},cur=cur):return None
     return {'type':kind,'id':document_id}
 app.config['AUTH_DIAGNOSTIC_RESOURCE']=diagnostic_resource
 
