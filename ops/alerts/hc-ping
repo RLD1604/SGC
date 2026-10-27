@@ -1,0 +1,19 @@
+#!/bin/sh
+# Envia um ping ao healthchecks.io para o check de uma unidade systemd.
+# Uso: hc-ping <unidade[.service]> [start|fail]
+# A URL de cada check fica em /etc/hc-ping/<nome>.url (root, 0600), nunca na unidade.
+# Nunca falha o serviço que o chamou: toda saída de erro é engolida e o código é 0.
+set -u
+name=${1%.service}
+suffix=${2:-}
+file="/etc/hc-ping/$name.url"
+[ -r "$file" ] || exit 0
+url=$(tr -d ' \r\n' < "$file")
+[ -n "$url" ] || exit 0
+case "$suffix" in
+  start|fail) url="$url/$suffix" ;;
+  "") ;;
+  *) exit 0 ;;
+esac
+curl -fsS -m 10 --retry 3 --retry-delay 5 -o /dev/null "$url" 2>/dev/null || true
+exit 0

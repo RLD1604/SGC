@@ -55,17 +55,21 @@ docker exec "$DB_CONTAINER" pg_dump \
 docker exec -i "$DB_CONTAINER" pg_restore --list <"$dump" >/dev/null
 
 # Restaura em um banco efêmero, sem porta publicada e sem rede compartilhada.
+# A espera e a restauração usam TCP (127.0.0.1): o servidor temporário que o
+# entrypoint da imagem sobe durante o initdb escuta só no socket Unix, então
+# pg_isready via socket responde "pronto" cedo demais e o pg_restore é morto
+# com "terminating connection due to administrator command" (falha de 24/10/2026).
 docker run -d --name "$restore_name" --network none \
   -e POSTGRES_HOST_AUTH_METHOD=trust -e POSTGRES_DB="$DB_NAME" \
   -e POSTGRES_USER="$DB_USER" "$POSTGRES_IMAGE" >/dev/null
 for _ in $(seq 1 60); do
-  if docker exec "$restore_name" pg_isready -U "$DB_USER" -d "$DB_NAME" >/dev/null 2>&1; then break; fi
+  if docker exec "$restore_name" pg_isready -h 127.0.0.1 -U "$DB_USER" -d "$DB_NAME" >/dev/null 2>&1; then break; fi
   sleep 1
 done
-docker exec "$restore_name" pg_isready -U "$DB_USER" -d "$DB_NAME" >/dev/null
+docker exec "$restore_name" pg_isready -h 127.0.0.1 -U "$DB_USER" -d "$DB_NAME" >/dev/null
 docker exec -i "$restore_name" pg_restore --exit-on-error --no-owner --no-privileges \
-  -U "$DB_USER" -d "$DB_NAME" <"$dump"
-table_count=$(docker exec "$restore_name" psql -XAt -U "$DB_USER" -d "$DB_NAME" \
+  -h 127.0.0.1 -U "$DB_USER" -d "$DB_NAME" <"$dump"
+table_count=$(docker exec "$restore_name" psql -XAt -h 127.0.0.1 -U "$DB_USER" -d "$DB_NAME" \
   -c "select count(*) from information_schema.tables where table_schema='public' and table_type='BASE TABLE'")
 [[ "$table_count" =~ ^[0-9]+$ && "$table_count" -gt 0 ]]
 docker rm -f "$restore_name" >/dev/null

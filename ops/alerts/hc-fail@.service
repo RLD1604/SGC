@@ -1,0 +1,6 @@
+[Unit]
+Description=Avisa o healthchecks.io que %i falhou
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/hc-ping %i fail
