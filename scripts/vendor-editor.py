@@ -8,7 +8,7 @@ import urllib.request
 
 DEST=Path(__file__).resolve().parents[1] / 'public/vendor/tinymce'
 PACKAGES=[
- ('https://registry.npmjs.org/tinymce/-/tinymce-8.9.1.tgz','5KrFiuKri2sPQW3ERWodsx3R0RZiw0cJJDr61qaMQiXO1ir3ZYaf6gVVaao+T29spZ9L9waaeE/co8Ov2Rn3vQ==','core'),
+ ('https://registry.npmjs.org/tinymce/-/tinymce-8.10.0.tgz','/e+/B+VdbzO02hLzfr3EaoYKYdr3phC/yitG7I9vpi2NqYvtb04UxO/Ay4y9VPqDaQHyigdFnHv2zuTgF7mnZQ==','core'),
  ('https://registry.npmjs.org/tinymce-i18n/-/tinymce-i18n-26.9.7.tgz','ZLmWShvol2xL9UfpI+rLuimU6CiDg7XryJU3m/PS6hc/Y7KJNghtrMnhX3b1F9dVD8ybD3iyIIFLvCJRmlE4fA==','language')
 ]
 for url,integrity,kind in PACKAGES:
